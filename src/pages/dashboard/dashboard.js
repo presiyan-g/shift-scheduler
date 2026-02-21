@@ -2,10 +2,10 @@ import { requireAuth } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
+import { getManagedTeams } from '@shared/teams.js';
 
 async function init() {
   const user = await requireAuth();
-  renderNavbar({ activePage: 'dashboard' });
 
   // 1. Fetch profile to get full_name and role
   const { data: profile, error: profileError } = await supabase
@@ -20,6 +20,8 @@ async function init() {
     return;
   }
 
+  renderNavbar({ activePage: 'dashboard', role: profile.role });
+
   // 2. Set welcome message
   const firstName = profile.full_name?.split(' ')[0] || 'there';
   document.getElementById('welcome-heading').textContent = `Welcome back, ${firstName}!`;
@@ -27,7 +29,7 @@ async function init() {
   const isManager = profile.role === 'manager' || profile.role === 'admin';
 
   if (isManager) {
-    document.getElementById('welcome-sub').textContent = "Here's your team's schedule overview.";
+    document.getElementById('welcome-sub').textContent = "Here's your teams' schedule overview.";
   }
 
   // 3. Date helpers
@@ -136,8 +138,12 @@ async function init() {
   // 8. Manager banner
   if (isManager) {
     document.getElementById('manager-banner').classList.remove('d-none');
+    const teams = await getManagedTeams(user.id);
+    const teamLabel = profile.role === 'admin'
+      ? 'all teams'
+      : `${teams.length} team(s)`;
     document.getElementById('manager-team-summary').textContent =
-      `${todayCount ?? 0} shift(s) scheduled for today across the team.`;
+      `${todayCount ?? 0} shift(s) scheduled for today across ${teamLabel}.`;
   }
 }
 

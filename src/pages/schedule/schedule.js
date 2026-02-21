@@ -2,13 +2,18 @@ import { requireAuth } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
+import { getAllTeams, getManagedTeams, getTeamEmployees } from '@shared/teams.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
 let currentWeekStart = null; // Date object — Monday of the displayed week
 let currentUser = null;
+let userRole = 'employee';
 let isManager = false;
-let employees = [];          // [{ id, full_name }] — loaded once for managers
+let isAdmin = false;
+let managedTeams = [];       // teams the current manager manages
+let selectedTeamId = null;   // currently selected team filter (null = all)
+let employees = [];          // [{ id, full_name }] — loaded for the selected team
 let currentShifts = [];      // cached after each loadWeek() for edit/delete lookup
 let pendingDeleteId = null;  // shift UUID awaiting deletion confirm
 let shiftModalInstance = null;
@@ -18,7 +23,6 @@ let deleteModalInstance = null;
 
 async function init() {
   currentUser = await requireAuth();
-  renderNavbar({ activePage: 'schedule' });
 
   // Fetch profile to determine role
   const { data: profile, error: profileError } = await supabase
@@ -33,20 +37,75 @@ async function init() {
     return;
   }
 
-  isManager = profile.role === 'manager' || profile.role === 'admin';
+  userRole = profile.role;
+  isAdmin = userRole === 'admin';
+  isManager = userRole === 'manager' || isAdmin;
+
+  renderNavbar({ activePage: 'schedule', role: userRole });
 
   // Subtitle text
   document.getElementById('schedule-subtitle').textContent = isManager
-    ? 'Viewing all team shifts for the week'
+    ? 'Viewing team shifts for the week'
     : 'Viewing your shifts for the week';
 
   if (isManager) {
     document.getElementById('add-shift-btn').classList.remove('d-none');
-    await fetchEmployees();
+
+    // Load teams for the team filter and modal dropdown
+    if (isAdmin) {
+      managedTeams = (await getAllTeams()).map((t) => ({ team: t }));
+    } else {
+      managedTeams = await getManagedTeams(currentUser.id);
+    }
+
+    const teamFilter = document.getElementById('team-filter');
+    const teamField = document.getElementById('team-field');
+    const shiftTeamSelect = document.getElementById('shift-team');
+
+    if (managedTeams.length > 0) {
+      // Populate team filter dropdown
+      teamFilter.innerHTML = managedTeams.length > 1
+        ? '<option value="">All My Teams</option>'
+        : '';
+      managedTeams.forEach((mt) => {
+        const opt = document.createElement('option');
+        opt.value = mt.team.id;
+        opt.textContent = mt.team.name;
+        teamFilter.appendChild(opt);
+      });
+      teamFilter.classList.remove('d-none');
+
+      // Populate team dropdown in shift modal
+      shiftTeamSelect.innerHTML = '<option value="">— Select team —</option>';
+      managedTeams.forEach((mt) => {
+        const opt = document.createElement('option');
+        opt.value = mt.team.id;
+        opt.textContent = mt.team.name;
+        shiftTeamSelect.appendChild(opt);
+      });
+      teamField.classList.remove('d-none');
+
+      // Auto-select if only one team
+      if (managedTeams.length === 1) {
+        selectedTeamId = managedTeams[0].team.id;
+        teamFilter.value = selectedTeamId;
+        shiftTeamSelect.value = selectedTeamId;
+        teamFilter.classList.add('d-none'); // hide single-option filter
+      }
+
+      // Load employees for the selected team (or first team)
+      await fetchEmployeesForTeam(selectedTeamId || managedTeams[0].team.id);
+    } else {
+      // Manager with no teams
+      document.getElementById('schedule-subtitle').textContent =
+        'You haven\'t been assigned to any teams yet. Contact your administrator.';
+      document.getElementById('add-shift-btn').classList.add('d-none');
+    }
   } else {
-    // Hide employee field in modal for non-managers
+    // Hide team & employee fields in modal for non-managers
+    document.getElementById('team-field').classList.add('d-none');
+    document.getElementById('shift-team').removeAttribute('required');
     document.getElementById('employee-field').classList.add('d-none');
-    // Employee field is not required for employees (they can't pick someone)
     document.getElementById('shift-employee').removeAttribute('required');
   }
 
@@ -98,6 +157,28 @@ function attachEventListeners() {
   document.getElementById('confirm-delete-btn').addEventListener('click', () => {
     handleDeleteConfirm();
   });
+
+  // Team filter change — reload shifts and employees for selected team
+  document.getElementById('team-filter').addEventListener('change', async (e) => {
+    selectedTeamId = e.target.value || null;
+    if (selectedTeamId) {
+      await fetchEmployeesForTeam(selectedTeamId);
+    }
+    await loadWeek();
+  });
+
+  // Team dropdown in shift modal — reload employees when team changes
+  document.getElementById('shift-team').addEventListener('change', async (e) => {
+    const teamId = e.target.value;
+    if (teamId) {
+      await fetchEmployeesForTeam(teamId);
+    } else {
+      // Clear employee dropdown
+      const select = document.getElementById('shift-employee');
+      select.innerHTML = '<option value="">— Select employee —</option>';
+      employees = [];
+    }
+  });
 }
 
 // ── Data fetching ────────────────────────────────────────────────────────────
@@ -117,12 +198,19 @@ async function loadWeek() {
   const weekStartStr = toDateString(currentWeekStart);
   const weekEndStr = toDateString(weekEnd);
 
-  const { data: shifts, error } = await supabase
+  let query = supabase
     .from('shifts')
     .select('*, employee:profiles!employee_id(full_name)')
     .gte('shift_date', weekStartStr)
     .lte('shift_date', weekEndStr)
     .order('start_time', { ascending: true });
+
+  // Filter by selected team (managers/admins)
+  if (selectedTeamId) {
+    query = query.eq('team_id', selectedTeamId);
+  }
+
+  const { data: shifts, error } = await query;
 
   if (error) {
     console.error('Shifts fetch error:', error);
@@ -139,18 +227,8 @@ async function loadWeek() {
   grid.classList.remove('d-none');
 }
 
-async function fetchEmployees() {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name')
-    .eq('role', 'employee')
-    .order('full_name');
-
-  if (error) {
-    console.error('Employee fetch error:', error);
-    showToast('Could not load employee list.', 'danger');
-    return;
-  }
+async function fetchEmployeesForTeam(teamId) {
+  const data = await getTeamEmployees(teamId);
 
   employees = data || [];
   const select = document.getElementById('shift-employee');
@@ -293,6 +371,9 @@ function openShiftModal(shiftId) {
     saveLabelEl.textContent = 'Update Shift';
 
     if (isManager) {
+      if (shift.team_id) {
+        document.getElementById('shift-team').value = shift.team_id;
+      }
       document.getElementById('shift-employee').value = shift.employee_id;
     }
     document.getElementById('shift-title').value = shift.title || '';
@@ -328,6 +409,9 @@ async function handleShiftSave() {
     start_time: document.getElementById('shift-start').value,
     end_time: document.getElementById('shift-end').value,
     notes: document.getElementById('shift-notes').value.trim() || null,
+    team_id: isManager
+      ? document.getElementById('shift-team').value || null
+      : null,
   };
 
   if (isEdit) {

@@ -23,10 +23,15 @@
         </h1>
         <p class="text-muted mb-0 small" id="schedule-subtitle">Loading...</p>
       </div>
-      <!-- Manager-only: shown by JS when role is manager/admin -->
-      <button class="btn btn-primary d-none" id="add-shift-btn" type="button">
-        <i class="bi bi-plus-lg me-1"></i>Add Shift
-      </button>
+      <!-- Manager/Admin controls -->
+      <div class="d-flex align-items-center gap-2">
+        <select class="form-select form-select-sm d-none" id="team-filter" style="max-width: 220px;">
+          <option value="">All My Teams</option>
+        </select>
+        <button class="btn btn-primary d-none" id="add-shift-btn" type="button">
+          <i class="bi bi-plus-lg me-1"></i>Add Shift
+        </button>
+      </div>
     </div>
 
     <!-- Week navigation -->
@@ -68,6 +73,15 @@
 
             <!-- Hidden shift ID for edit mode -->
             <input type="hidden" id="shift-id" />
+
+            <!-- Team dropdown (hidden for employees, shown for managers) -->
+            <div class="mb-3 d-none" id="team-field">
+              <label for="shift-team" class="form-label fw-medium">Team</label>
+              <select class="form-select" id="shift-team" required>
+                <option value="">— Select team —</option>
+              </select>
+              <div class="invalid-feedback">Please select a team.</div>
+            </div>
 
             <!-- Employee dropdown (hidden for employees, shown for managers) -->
             <div class="mb-3" id="employee-field">

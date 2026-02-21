@@ -1,0 +1,24 @@
+/* Teams page styles */
+
+.team-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.team-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.team-card .card-body {
+  min-height: 100px;
+}
+
+/* Member table rows */
+#members-tbody tr {
+  vertical-align: middle;
+}
+
+#members-tbody .badge {
+  font-size: 0.75rem;
+}

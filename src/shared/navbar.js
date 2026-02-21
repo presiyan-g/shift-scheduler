@@ -6,16 +6,22 @@ import { supabase } from '@shared/supabase.js';
  *
  * @param {object} options
  * @param {string} [options.activePage] - Current page key to highlight in nav (e.g. 'dashboard', 'schedule')
+ * @param {string} [options.role] - User role ('admin', 'manager', 'employee') — controls which links are shown
  */
-export function renderNavbar({ activePage = '' } = {}) {
+export function renderNavbar({ activePage = '', role = 'employee' } = {}) {
   const navLinks = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: 'bi-speedometer2' },
-    // Future pages — uncomment as they are built:
     { key: 'schedule', label: 'Schedule', href: '/schedule.html', icon: 'bi-calendar3' },
+    // Future pages — uncomment as they are built:
     // { key: 'swaps', label: 'Swaps', href: '/swaps.html', icon: 'bi-arrow-left-right' },
     // { key: 'leave', label: 'Leave', href: '/leave.html', icon: 'bi-airplane' },
     // { key: 'profile', label: 'Profile', href: '/profile.html', icon: 'bi-person-circle' },
   ];
+
+  // Teams link visible only to managers and admins
+  if (role === 'manager' || role === 'admin') {
+    navLinks.push({ key: 'teams', label: 'Teams', href: '/teams.html', icon: 'bi-people' });
+  }
 
   const linksHtml = navLinks
     .map(

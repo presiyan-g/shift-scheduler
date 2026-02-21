@@ -13,6 +13,7 @@ const pageRewrites = {
   '/register.html':  '/src/pages/register/register.html',
   '/dashboard.html': '/src/pages/dashboard/dashboard.html',
   '/schedule.html':  '/src/pages/schedule/schedule.html',
+  '/teams.html':     '/src/pages/teams/teams.html',
 };
 
 const rewritePlugin = {
@@ -43,6 +44,7 @@ export default defineConfig({
         register:  resolve(__dirname, 'src/pages/register/register.html'),
         dashboard: resolve(__dirname, 'src/pages/dashboard/dashboard.html'),
         schedule:  resolve(__dirname, 'src/pages/schedule/schedule.html'),
+        teams:     resolve(__dirname, 'src/pages/teams/teams.html'),
       },
     },
   },
