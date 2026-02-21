@@ -1,0 +1,29 @@
+:root {
+  --brand-primary: #4f46e5;
+  --brand-secondary: #7c3aed;
+}
+
+.auth-page {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e8e4ff 50%, #f0f4ff 100%);
+  min-height: 100vh;
+}
+
+.auth-card {
+  border-radius: 20px !important;
+}
+
+/* Tighten input group borders */
+.input-group .form-control:focus {
+  box-shadow: none;
+  border-color: #ced4da;
+}
+
+.input-group:focus-within .input-group-text,
+.input-group:focus-within .form-control,
+.input-group:focus-within .btn-outline-secondary {
+  border-color: var(--brand-primary);
+}
+
+.input-group:focus-within .input-group-text {
+  background-color: #f5f3ff;
+}

@@ -46,10 +46,18 @@ Client (Browser)  ──REST API──▶  Supabase (Postgres + Auth + Storage)
 shift-scheduler/
 ├── src/
 │   ├── pages/
-│   │   ├── index/              ← landing page (login + register)
+│   │   ├── index/              ← public landing / marketing page
 │   │   │   ├── index.html
 │   │   │   ├── index.js
 │   │   │   └── index.css
+│   │   ├── login/              ← login page
+│   │   │   ├── login.html
+│   │   │   ├── login.js
+│   │   │   └── login.css
+│   │   ├── register/           ← registration page
+│   │   │   ├── register.html
+│   │   │   ├── register.js
+│   │   │   └── register.css
 │   │   ├── dashboard/          ← employee dashboard (my shifts, pending requests)
 │   │   │   ├── dashboard.html
 │   │   │   ├── dashboard.js
@@ -73,6 +81,7 @@ shift-scheduler/
 │   └── shared/                 ← reusable modules (NOT a page)
 │       ├── supabase.js         ← Supabase client initialisation (single instance)
 │       ├── auth.js             ← auth helpers (getUser, requireAuth, redirectIfAuthed)
+│       ├── auth.css            ← shared styles for login & register pages
 │       ├── navbar.js           ← shared navbar rendered via JS
 │       └── toast.js            ← toast notification helper
 ├── .env                        ← VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
@@ -84,11 +93,42 @@ shift-scheduler/
 
 ## Key Pages (planned — may evolve)
 
-- Landing page (index.html) - includes login and register
+- Landing page (index.html) — public marketing page
+- Login page (login.html) — email/password sign-in
+- Register page (register.html) — new account creation
 - Dashboard (my shifts, my pending requests)
 - Team schedule (calendar/list view)
 - Swap requests, Leave requests
 - Profile
+
+## Database Migrations
+
+**This is a hard rule for the project. No exceptions.**
+
+All database schema changes (tables, columns, indexes, RLS policies, triggers, functions, enums) must be tracked as SQL migration files under `supabase/migrations/`. These files are committed to Git and serve as the single source of truth for the database schema — both for documentation and for reproducibility.
+
+### Rules
+
+- **Every schema change requires a migration file.** Never apply a schema change in Supabase without also creating the corresponding `.sql` file locally.
+- **Local files must match Supabase exactly.** The migrations listed in Supabase (`supabase_migrations.schema_migrations`) and the files in `supabase/migrations/` must always be identical — same versions, same names, same SQL.
+- **Migration files are committed immediately.** Any time a migration is applied to Supabase, the matching local file is committed to Git in the same change. Never leave them out of a commit.
+- **Never apply schema changes manually** (via the Supabase dashboard SQL editor or any other tool) without also creating the migration file. If a manual change was already made, export its SQL and create the file retroactively before doing any further work.
+- **Verify parity before finishing DB work.** Before marking any DB-related task complete, compare remote migration history vs local files. If they differ, resolve the drift first.
+- **File naming:** `<timestamp>_<snake_case_description>.sql` — e.g. `20260221125524_create_profiles_table.sql`. Use the same timestamp format Supabase uses.
+
+### Folder
+
+```
+supabase/
+└── migrations/
+    ├── 20260221125524_create_profiles_table.sql
+    ├── 20260221125549_fix_update_updated_at_search_path.sql
+    └── ...  ← every future migration goes here
+```
+
+> When using the Supabase MCP to apply a migration, always use `apply_migration` (not `execute_sql`) so the version is recorded in `supabase_migrations.schema_migrations`. Then immediately write the same SQL to a local file and commit it.
+
+---
 
 ## Pages and Navigation
 - Split the app into multiple HTML pages.
@@ -133,6 +173,12 @@ When working on this project, the AI assistant should:
 8. **Use Bootstrap 5 classes** for styling — minimize custom CSS.
 9. **Handle all errors** — every Supabase call should have error handling with user-facing feedback.
 10. **Write commit-friendly code** — each change should be small, testable, and meaningful.
+11. Use the Supabase MCP config in `.mcp.json` for any database schema changes, including creating tables, defining RLS policies, and setting up relationships.
+12. **Follow the Database Migrations rules** (see dedicated section above) — they are hard project rules, not optional guidelines.
+13. **Always use `apply_migration`** (never `execute_sql`) for DDL so Supabase records the version in `supabase_migrations.schema_migrations`.
+14. **After every `apply_migration` call**, immediately write the same SQL to `supabase/migrations/<version>_<name>.sql` and include it in the same Git commit.
+15. **Verify migration parity** before finishing any DB-related task: check that every version in `supabase_migrations.schema_migrations` has a matching local file and vice versa. Resolve any drift before marking the task complete.
+16. If migration parity cannot be verified (missing access, missing credentials, CLI/MCP failure), explicitly report the blocker and do not claim schema changes are complete.
 
 
 

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment variables (contains API keys — never commit)
+.env
+.env.local
+.env.*.local
+
+# Vite cache
+.vite/
+
+# Editor & IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# AI assistant session data
+.claude/
+
+# MCP server config (contains project references / tokens)
+.mcp.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Optional: lock files (uncomment to ignore)
+# package-lock.json

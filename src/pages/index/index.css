@@ -1,0 +1,120 @@
+/* ── Design tokens ── */
+:root {
+  --brand-primary: #4f46e5;
+  --brand-secondary: #7c3aed;
+  --brand-gradient: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
+}
+
+/* ── Hero ── */
+.hero-section {
+  min-height: 100vh;
+  background: var(--brand-gradient);
+  padding-top: 76px; /* navbar clearance */
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle radial glow in hero */
+.hero-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(255,255,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  line-height: 0;
+}
+
+.hero-wave svg {
+  display: block;
+  width: 100%;
+  height: 60px;
+}
+
+.hero-cta-primary {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hero-cta-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+}
+
+/* ── Section spacing ── */
+.py-section {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+}
+
+/* ── Feature cards ── */
+.feature-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feature-card {
+  border-radius: 16px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.1) !important;
+}
+
+/* ── Step numbers ── */
+.step-number {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--brand-gradient);
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+}
+
+/* ── Secondary CTA section ── */
+.cta-section {
+  background: var(--brand-gradient);
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 80% at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Light subtle background ── */
+.bg-light-subtle {
+  background-color: #f8fafc;
+}
+
+/* ── Opacity utility ── */
+.opacity-90 {
+  opacity: 0.9;
+}
+
+/* ── Responsive tweaks ── */
+@media (max-width: 767px) {
+  .hero-section {
+    min-height: auto;
+    padding-bottom: 80px;
+  }
+}

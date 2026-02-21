@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShiftScheduler — Smart Scheduling for Small Teams</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <link rel="stylesheet" href="/src/pages/index/index.css" />
+</head>
+<body>
+
+  <!-- ── NAVBAR ── -->
+  <nav class="navbar navbar-expand-lg navbar-dark position-absolute w-100" style="z-index: 10;">
+    <div class="container">
+      <a class="navbar-brand fw-bold fs-4" href="/">
+        <i class="bi bi-calendar-check me-2"></i>ShiftScheduler
+      </a>
+      <div class="ms-auto d-flex gap-2">
+        <a href="/login.html" class="btn btn-outline-light btn-sm px-3">Log In</a>
+        <a href="/register.html" class="btn btn-light btn-sm px-3 fw-semibold text-primary">Sign Up Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── HERO ── -->
+  <header class="hero-section d-flex align-items-center text-white">
+    <div class="container text-center py-5">
+      <span class="badge bg-white bg-opacity-25 text-white mb-4 px-3 py-2 rounded-pill fs-6 fw-normal border border-white border-opacity-25">
+        <i class="bi bi-stars me-1"></i> Built for small teams
+      </span>
+      <h1 class="display-3 fw-bold mb-4 lh-sm">
+        Smart shift scheduling<br class="d-none d-md-block"/>
+        for small businesses
+      </h1>
+      <p class="lead mb-5 mx-auto opacity-90" style="max-width: 560px;">
+        Manage shifts, handle time-off requests, and coordinate swap requests —
+        all in one simple tool your whole team will actually use.
+      </p>
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <a href="/register.html"
+           class="btn btn-light btn-lg fw-bold px-5 shadow-sm hero-cta-primary">
+          Get Started Free
+          <i class="bi bi-arrow-right ms-2"></i>
+        </a>
+        <a href="/login.html"
+           class="btn btn-outline-light btn-lg px-5">
+          Log In
+        </a>
+      </div>
+      <p class="mt-4 opacity-75 small">No credit card required &nbsp;·&nbsp; Free to start</p>
+    </div>
+
+    <!-- Decorative wave separator -->
+    <div class="hero-wave">
+      <svg viewBox="0 0 1440 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z" fill="#f8fafc"/>
+      </svg>
+    </div>
+  </header>
+
+  <!-- ── FEATURES ── -->
+  <section class="py-section bg-light-subtle" id="features">
+    <div class="container">
+      <div class="text-center mb-5">
+        <h2 class="fw-bold fs-1 mb-3">Everything your team needs</h2>
+        <p class="text-muted fs-5 mx-auto" style="max-width: 500px;">
+          Simple, powerful tools that save hours of scheduling headaches every week.
+        </p>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="feature-card card h-100 border-0 shadow-sm text-center p-4 p-lg-5">
+            <div class="feature-icon mx-auto mb-4 bg-primary bg-opacity-10">
+              <i class="bi bi-calendar3 fs-3 text-primary"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Shift Management</h5>
+            <p class="text-muted small mb-0">
+              Managers create, edit, and publish shifts. Employees see their
+              schedule the moment it goes live.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="feature-card card h-100 border-0 shadow-sm text-center p-4 p-lg-5">
+            <div class="feature-icon mx-auto mb-4 bg-success bg-opacity-10">
+              <i class="bi bi-airplane fs-3 text-success"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Time-Off Requests</h5>
+            <p class="text-muted small mb-0">
+              Employees submit leave requests; managers approve or deny with
+              one click. Full audit trail included.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="feature-card card h-100 border-0 shadow-sm text-center p-4 p-lg-5">
+            <div class="feature-icon mx-auto mb-4 bg-warning bg-opacity-10">
+              <i class="bi bi-arrow-left-right fs-3 text-warning"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Swap Shifts</h5>
+            <p class="text-muted small mb-0">
+              Employees propose swaps with colleagues. Manager approval keeps
+              coverage guaranteed at all times.
+            </p>
+          </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="feature-card card h-100 border-0 shadow-sm text-center p-4 p-lg-5">
+            <div class="feature-icon mx-auto mb-4 bg-info bg-opacity-10">
+              <i class="bi bi-people fs-3 text-info"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Team Scheduling</h5>
+            <p class="text-muted small mb-0">
+              Calendar and list views of the full team's schedule. Always know
+              who's working and when.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HOW IT WORKS ── -->
+  <section class="py-section">
+    <div class="container">
+      <div class="text-center mb-5">
+        <h2 class="fw-bold fs-1 mb-3">Up and running in minutes</h2>
+        <p class="text-muted fs-5">Three simple steps to a perfectly scheduled team.</p>
+      </div>
+
+      <div class="row g-5 align-items-center">
+        <div class="col-12 col-md-4 text-center">
+          <div class="step-number mx-auto mb-3">1</div>
+          <h5 class="fw-bold">Create your account</h5>
+          <p class="text-muted small">
+            Sign up free in seconds — no credit card, no setup fees,
+            no complicated onboarding.
+          </p>
+        </div>
+        <div class="col-12 col-md-4 text-center">
+          <div class="step-number mx-auto mb-3">2</div>
+          <h5 class="fw-bold">Add your team</h5>
+          <p class="text-muted small">
+            Invite employees by email. Each person gets their own account
+            with the right level of access.
+          </p>
+        </div>
+        <div class="col-12 col-md-4 text-center">
+          <div class="step-number mx-auto mb-3">3</div>
+          <h5 class="fw-bold">Publish schedules</h5>
+          <p class="text-muted small">
+            Build shifts in the scheduler and publish. Your team is
+            instantly notified and can view their schedule anywhere.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECONDARY CTA ── -->
+  <section class="cta-section py-section text-center text-white">
+    <div class="container">
+      <h2 class="fw-bold fs-1 mb-3">Ready to simplify your scheduling?</h2>
+      <p class="lead mb-5 opacity-90">
+        Join hundreds of small businesses that have ditched the spreadsheets.
+      </p>
+      <a href="/register.html"
+         class="btn btn-light btn-lg fw-bold px-5 shadow">
+        Create your free account
+        <i class="bi bi-arrow-right ms-2"></i>
+      </a>
+      <p class="mt-4 opacity-75 small">No credit card required</p>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ── -->
+  <footer class="py-4 bg-dark text-center">
+    <div class="container">
+      <p class="mb-1 fw-bold text-white">
+        <i class="bi bi-calendar-check me-2 text-primary"></i>ShiftScheduler
+      </p>
+      <p class="mb-0 text-white-50 small">
+        &copy; 2026 ShiftScheduler. Smart scheduling for small teams.
+      </p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/src/pages/index/index.js"></script>
+</body>
+</html>

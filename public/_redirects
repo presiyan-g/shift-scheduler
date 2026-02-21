@@ -1,0 +1,6 @@
+# Clean URL rewrites — maps public paths to Vite's build output paths
+/                   /src/pages/index/index.html       200
+/index.html         /src/pages/index/index.html       200
+/login.html         /src/pages/login/login.html       200
+/register.html      /src/pages/register/register.html 200
+/dashboard.html     /src/pages/dashboard/dashboard.html 200
