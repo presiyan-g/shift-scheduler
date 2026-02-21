@@ -36,10 +36,51 @@ Client (Browser)  ──REST API──▶  Supabase (Postgres + Auth + Storage)
 
 - **Use modular design**
 - **One page = one HTML file + one co-located or imported JS module.** No monolith scripts.
-- For each page/feature, create a dedicated folder that contains all related files
-- **CSS**: Bootstrap 5 via CDN or npm, plus a single `styles.css` for custom overrides.
+- For each page/feature, create a dedicated folder that contains all related files (HTML, JS, CSS together — never split by file type)
+- **CSS**: Bootstrap 5 via CDN or npm, plus a per-page or shared `styles.css` for custom overrides.
 - **Environment variables**: prefixed with `VITE_` so Vite exposes them to client code.
 
+### Folder structure
+
+```
+shift-scheduler/
+├── src/
+│   ├── pages/
+│   │   ├── index/              ← landing page (login + register)
+│   │   │   ├── index.html
+│   │   │   ├── index.js
+│   │   │   └── index.css
+│   │   ├── dashboard/          ← employee dashboard (my shifts, pending requests)
+│   │   │   ├── dashboard.html
+│   │   │   ├── dashboard.js
+│   │   │   └── dashboard.css
+│   │   ├── schedule/           ← team schedule (calendar/list view)
+│   │   │   ├── schedule.html
+│   │   │   ├── schedule.js
+│   │   │   └── schedule.css
+│   │   ├── swaps/              ← shift swap requests
+│   │   │   ├── swaps.html
+│   │   │   ├── swaps.js
+│   │   │   └── swaps.css
+│   │   ├── leave/              ← time-off / leave requests
+│   │   │   ├── leave.html
+│   │   │   ├── leave.js
+│   │   │   └── leave.css
+│   │   └── profile/            ← user profile & settings
+│   │       ├── profile.html
+│   │       ├── profile.js
+│   │       └── profile.css
+│   └── shared/                 ← reusable modules (NOT a page)
+│       ├── supabase.js         ← Supabase client initialisation (single instance)
+│       ├── auth.js             ← auth helpers (getUser, requireAuth, redirectIfAuthed)
+│       ├── navbar.js           ← shared navbar rendered via JS
+│       └── toast.js            ← toast notification helper
+├── .env                        ← VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+├── vite.config.js
+└── package.json
+```
+
+> New pages follow the same pattern: create a new folder under `src/`, add the HTML/JS/CSS inside it.
 
 ## Key Pages (planned — may evolve)
 
@@ -51,12 +92,12 @@ Client (Browser)  ──REST API──▶  Supabase (Postgres + Auth + Storage)
 
 ## Pages and Navigation
 - Split the app into multiple HTML pages.
-- Implement pages as reusable components.
 - Use routing to navigate between pages.
 - Use full URL paths (e.g. `/dashboard.html`) instead of hash-based routing.
 
 ## UI Guidelines
 
+- Build **shared UI elements** once and reuse them across pages rather than duplicating markup. This includes the navbar, footer, and any other elements that appear on multiple pages. Each component should own its own HTML structure, CSS styles, and JS behavior.
 - **Bootstrap 5** for layout, grid, forms, buttons, modals, and cards.
 - **Bootstrap Icons** (or Font Awesome) for visual cues.
 - **Responsive design**: mobile-first. The schedule view should work on phones.
@@ -64,6 +105,8 @@ Client (Browser)  ──REST API──▶  Supabase (Postgres + Auth + Storage)
 - **Consistent navbar** across all authenticated pages with role-aware links.
 - Use modern and beautiful design with semantic HTML.
 - Use consistent color scheme and typography.
+
+
 
 ## Coding Standards
 
@@ -90,3 +133,6 @@ When working on this project, the AI assistant should:
 8. **Use Bootstrap 5 classes** for styling — minimize custom CSS.
 9. **Handle all errors** — every Supabase call should have error handling with user-facing feedback.
 10. **Write commit-friendly code** — each change should be small, testable, and meaningful.
+
+
+
