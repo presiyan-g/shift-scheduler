@@ -61,6 +61,13 @@
   font-size: 0.95rem;
 }
 
+/* ── Header controls ── */
+
+#add-shift-btn {
+  white-space: nowrap;
+  gap: 0.35rem;
+}
+
 /* ── Loading state ── */
 
 #schedule-loading {
