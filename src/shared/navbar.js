@@ -24,16 +24,16 @@ export function renderNavbar({
   }
 
   const navLinks = [
-    { key: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: 'bi-speedometer2' },
-    { key: 'schedule', label: 'Schedule', href: '/schedule.html', icon: 'bi-calendar3' },
+    { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'bi-speedometer2' },
+    { key: 'schedule', label: 'Schedule', href: '/schedule', icon: 'bi-calendar3' },
     // Future pages — uncomment as they are built:
-    // { key: 'swaps', label: 'Swaps', href: '/swaps.html', icon: 'bi-arrow-left-right' },
-    // { key: 'leave', label: 'Leave', href: '/leave.html', icon: 'bi-airplane' },
+    // { key: 'swaps', label: 'Swaps', href: '/swaps', icon: 'bi-arrow-left-right' },
+    // { key: 'leave', label: 'Leave', href: '/leave', icon: 'bi-airplane' },
   ];
 
   // Teams link visible to admins and team managers
   if (role === 'admin' || isTeamManager) {
-    navLinks.push({ key: 'teams', label: 'Teams', href: '/teams.html', icon: 'bi-people' });
+    navLinks.push({ key: 'teams', label: 'Teams', href: '/teams', icon: 'bi-people' });
   }
 
   const linksHtml = navLinks
@@ -55,7 +55,7 @@ export function renderNavbar({
   nav.className = 'navbar navbar-expand-lg navbar-dark bg-primary';
   nav.innerHTML = `
     <div class="container">
-      <a class="navbar-brand fw-bold" href="/dashboard.html">
+      <a class="navbar-brand fw-bold" href="/dashboard">
         <i class="bi bi-calendar-check me-2"></i>ShiftScheduler
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
@@ -83,12 +83,12 @@ export function renderNavbar({
           </button>
           <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" aria-labelledby="user-menu-btn">
             <li>
-              <a class="dropdown-item" href="/profile.html">
+              <a class="dropdown-item" href="/profile">
                 <i class="bi bi-person-circle me-2"></i>Profile
               </a>
             </li>
             <li>
-              <a class="dropdown-item" href="/account.html">
+              <a class="dropdown-item" href="/account">
                 <i class="bi bi-gear me-2"></i>Account
               </a>
             </li>
@@ -109,7 +109,7 @@ export function renderNavbar({
   // Logout handler
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await supabase.auth.signOut();
-    window.location.replace('/login.html');
+    window.location.replace('/login');
   });
 }
 

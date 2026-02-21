@@ -47,7 +47,7 @@ async function init() {
 
       showToast('Welcome back!', 'success', 1500);
       setTimeout(() => {
-        window.location.href = '/dashboard.html';
+        window.location.href = '/dashboard';
       }, 500);
 
     } catch (err) {

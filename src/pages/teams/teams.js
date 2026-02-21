@@ -48,7 +48,7 @@ async function init() {
     const managed = await getManagedTeams(currentUser.id);
     isTeamManager = managed.length > 0;
     if (!isTeamManager) {
-      window.location.replace('/dashboard.html');
+      window.location.replace('/dashboard');
       return;
     }
   }
@@ -77,6 +77,7 @@ async function init() {
 
   attachEventListeners();
   await loadTeams();
+  await openDeepLinkedTeam();
 }
 
 // ── Event listeners ─────────────────────────────────────────────────────────
@@ -141,6 +142,20 @@ async function loadTeams() {
 async function loadTeamDetail(teamId) {
   currentMembers = await getTeamMembers(teamId);
   renderMembersTable();
+}
+
+async function openDeepLinkedTeam() {
+  const params = new URLSearchParams(window.location.search);
+  const deepLinkedTeamId = params.get('team');
+  if (!deepLinkedTeamId) return;
+
+  const targetTeam = teams.find((team) => team.id === deepLinkedTeamId);
+  if (!targetTeam) {
+    showToast('Team not found or access denied.', 'warning');
+    return;
+  }
+
+  await showDetailView(deepLinkedTeamId);
 }
 
 // ── Rendering: Team list ────────────────────────────────────────────────────
@@ -240,12 +255,15 @@ function showListView() {
   document.getElementById('team-list-view').classList.remove('d-none');
   document.getElementById('create-team-btn').classList.toggle('d-none', !isAdmin);
   currentTeamId = null;
+  syncTeamQueryParam(null);
 }
 
 async function showDetailView(teamId) {
   currentTeamId = teamId;
   const team = teams.find((t) => t.id === teamId);
   if (!team) return;
+
+  syncTeamQueryParam(teamId);
 
   document.getElementById('detail-team-name').textContent = team.name;
   document.getElementById('detail-team-desc').textContent = team.description || '';
@@ -258,6 +276,16 @@ async function showDetailView(teamId) {
   document.getElementById('team-detail-view').classList.remove('d-none');
 
   await loadTeamDetail(teamId);
+}
+
+function syncTeamQueryParam(teamId) {
+  const url = new URL(window.location.href);
+  if (teamId) {
+    url.searchParams.set('team', teamId);
+  } else {
+    url.searchParams.delete('team');
+  }
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 // ── Modal: Create / Edit Team ───────────────────────────────────────────────

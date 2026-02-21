@@ -78,7 +78,7 @@ async function init() {
         // Email confirmation disabled — user is logged in immediately
         showToast('Account created! Redirecting…', 'success', 2000);
         setTimeout(() => {
-          window.location.href = '/dashboard.html';
+          window.location.href = '/dashboard';
         }, 500);
       } else {
         // Email confirmation required
@@ -88,7 +88,7 @@ async function init() {
           8000
         );
         setTimeout(() => {
-          window.location.href = '/login.html';
+          window.location.href = '/login';
         }, 3000);
       }
 

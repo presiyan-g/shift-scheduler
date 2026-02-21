@@ -4,27 +4,52 @@ import { defineConfig } from 'vite';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-// Maps clean URLs to their source HTML files so the dev server
-// can serve /login.html → src/pages/login/login.html, etc.
+// Maps clean URLs to their source HTML files for the dev server.
 const pageRewrites = {
-  '/':               '/src/pages/index/index.html',
-  '/index.html':     '/src/pages/index/index.html',
-  '/login.html':     '/src/pages/login/login.html',
-  '/register.html':  '/src/pages/register/register.html',
-  '/dashboard.html': '/src/pages/dashboard/dashboard.html',
-  '/schedule.html':  '/src/pages/schedule/schedule.html',
-  '/teams.html':     '/src/pages/teams/teams.html',
-  '/profile.html':   '/src/pages/profile/profile.html',
-  '/account.html':   '/src/pages/account/account.html',
+  '/':          '/src/pages/index/index.html',
+  '/index':     '/src/pages/index/index.html',
+  '/login':     '/src/pages/login/login.html',
+  '/register':  '/src/pages/register/register.html',
+  '/dashboard': '/src/pages/dashboard/dashboard.html',
+  '/schedule':  '/src/pages/schedule/schedule.html',
+  '/teams':     '/src/pages/teams/teams.html',
+  '/profile':   '/src/pages/profile/profile.html',
+  '/account':   '/src/pages/account/account.html',
+};
+
+// Redirect legacy .html routes to clean paths so URLs stay extensionless.
+const legacyPathRedirects = {
+  '/index.html':     '/',
+  '/login.html':     '/login',
+  '/register.html':  '/register',
+  '/dashboard.html': '/dashboard',
+  '/schedule.html':  '/schedule',
+  '/teams.html':     '/teams',
+  '/profile.html':   '/profile',
+  '/account.html':   '/account',
 };
 
 const rewritePlugin = {
   name: 'page-rewrites',
   configureServer(server) {
-    server.middlewares.use((req, _res, next) => {
-      if (req.url in pageRewrites) {
-        req.url = pageRewrites[req.url];
+    server.middlewares.use((req, res, next) => {
+      const originalUrl = req.url ?? '/';
+      const [pathname, query = ''] = originalUrl.split('?');
+      const redirectPath = legacyPathRedirects[pathname];
+
+      if (redirectPath) {
+        const target = query ? `${redirectPath}?${query}` : redirectPath;
+        res.statusCode = 301;
+        res.setHeader('Location', target);
+        res.end();
+        return;
       }
+
+      const rewrittenPath = pageRewrites[pathname];
+      if (rewrittenPath) {
+        req.url = query ? `${rewrittenPath}?${query}` : rewrittenPath;
+      }
+
       next();
     });
   },

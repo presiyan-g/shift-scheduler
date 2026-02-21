@@ -18,10 +18,10 @@ export async function getUser() {
  * Call at the top of every protected page's init function.
  * Returns the user so callers don't need to call getUser() again.
  *
- * @param {string} [loginPath='/login.html']
+ * @param {string} [loginPath='/login']
  * @returns {Promise<import('@supabase/supabase-js').User>}
  */
-export async function requireAuth(loginPath = '/login.html') {
+export async function requireAuth(loginPath = '/login') {
   const user = await getUser();
   if (!user) {
     window.location.replace(loginPath);
@@ -35,11 +35,11 @@ export async function requireAuth(loginPath = '/login.html') {
  * Redirects already-authenticated users away from public pages (login, register).
  * Call at the top of login.js and register.js init functions.
  *
- * @param {string} [dashboardPath='/dashboard.html']
+ * @param {string} [dashboardPath='/dashboard']
  * @returns {Promise<void>}
  */
 export async function redirectIfAuthed(
-  dashboardPath = '/dashboard.html'
+  dashboardPath = '/dashboard'
 ) {
   const user = await getUser();
   if (user) {

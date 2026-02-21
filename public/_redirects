@@ -1,6 +1,20 @@
-# Clean URL rewrites — maps public paths to Vite's build output paths
-/                   /src/pages/index/index.html       200
-/index.html         /src/pages/index/index.html       200
-/login.html         /src/pages/login/login.html       200
-/register.html      /src/pages/register/register.html 200
-/dashboard.html     /src/pages/dashboard/dashboard.html 200
+# Clean URL rewrites: maps public paths to built HTML files
+/                   /src/pages/index/index.html           200
+/index              /src/pages/index/index.html           200
+/login              /src/pages/login/login.html           200
+/register           /src/pages/register/register.html     200
+/dashboard          /src/pages/dashboard/dashboard.html   200
+/schedule           /src/pages/schedule/schedule.html     200
+/teams              /src/pages/teams/teams.html           200
+/profile            /src/pages/profile/profile.html       200
+/account            /src/pages/account/account.html       200
+
+# Legacy URL redirects
+/index.html         /                                      301
+/login.html         /login                                 301
+/register.html      /register                              301
+/dashboard.html     /dashboard                             301
+/schedule.html      /schedule                              301
+/teams.html         /teams                                 301
+/profile.html       /profile                               301
+/account.html       /account                               301

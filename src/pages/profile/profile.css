@@ -67,3 +67,14 @@
 #teams-list .border-bottom:last-child {
   border-bottom: none !important;
 }
+
+.profile-team-link {
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.profile-team-link:hover,
+.profile-team-link:focus-visible {
+  background-color: var(--bs-light);
+}

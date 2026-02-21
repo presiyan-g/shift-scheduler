@@ -93,9 +93,9 @@ shift-scheduler/
 
 ## Key Pages (planned — may evolve)
 
-- Landing page (index.html) — public marketing page
-- Login page (login.html) — email/password sign-in
-- Register page (register.html) — new account creation
+- Landing page (`/`) — public marketing page
+- Login page (`/login`) — email/password sign-in
+- Register page (`/register`) — new account creation
 - Dashboard (my shifts, my pending requests)
 - Team schedule (calendar/list view)
 - Swap requests, Leave requests
@@ -133,7 +133,7 @@ supabase/
 ## Pages and Navigation
 - Split the app into multiple HTML pages.
 - Use routing to navigate between pages.
-- Use full URL paths (e.g. `/dashboard`) instead of hash-based routing.
+- Use clean URL paths (e.g. `/dashboard`) instead of hash-based routing.
 
 ## UI Guidelines
 

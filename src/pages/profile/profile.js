@@ -238,7 +238,11 @@ async function loadTeamMemberships(userId) {
   container.innerHTML = data
     .map(
       (row) => `
-    <div class="d-flex align-items-center px-4 py-3 border-bottom">
+    <a
+      href="/teams?team=${encodeURIComponent(row.team?.id ?? '')}"
+      class="d-flex align-items-center px-4 py-3 border-bottom profile-team-link"
+      ${row.team?.id ? '' : 'aria-disabled="true" tabindex="-1"'}
+    >
       <div class="me-3">
         <i class="bi bi-people-fill text-primary fs-5"></i>
       </div>
@@ -249,7 +253,7 @@ async function loadTeamMemberships(userId) {
       <span class="badge ${row.role === 'manager' ? 'bg-primary' : 'bg-secondary'} rounded-pill">
         ${row.role === 'manager' ? 'Manager' : 'Member'}
       </span>
-    </div>
+    </a>
   `
     )
     .join('');
