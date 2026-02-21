@@ -7,7 +7,7 @@ import { getAllTeams, getManagedTeams, getTeamMembers } from '@shared/teams.js';
 // ── Module-level state ──────────────────────────────────────────────────────
 
 let currentUser = null;
-let userRole = 'employee';        // 'admin' | 'manager' | 'employee'
+let userRole = 'employee';        // 'admin' | 'employee'
 let isAdmin = false;
 let teams = [];                    // current list of teams
 let currentTeamId = null;          // team shown in detail view
@@ -40,13 +40,18 @@ async function init() {
   userRole = profile.role;
   isAdmin = userRole === 'admin';
 
-  renderNavbar({ activePage: 'teams', role: userRole });
-
-  // Only managers and admins should be on this page
-  if (userRole === 'employee') {
-    window.location.replace('/dashboard.html');
-    return;
+  // Only admins and team managers should be on this page
+  let isTeamManager = false;
+  if (!isAdmin) {
+    const managed = await getManagedTeams(currentUser.id);
+    isTeamManager = managed.length > 0;
+    if (!isTeamManager) {
+      window.location.replace('/dashboard.html');
+      return;
+    }
   }
+
+  renderNavbar({ activePage: 'teams', role: userRole, isTeamManager });
 
   // Admin-only controls
   if (isAdmin) {
@@ -204,7 +209,6 @@ function renderMembersTable() {
 
       const appRoleBadge = {
         admin: '<span class="badge bg-danger-subtle text-danger">Admin</span>',
-        manager: '<span class="badge bg-primary-subtle text-primary">Manager</span>',
         employee: '<span class="badge bg-success-subtle text-success">Employee</span>',
       }[profile?.role] || '';
 
@@ -329,12 +333,9 @@ async function openMemberModal() {
   form.reset();
   form.classList.remove('was-validated');
 
-  // Fetch all profiles to populate the dropdown
-  // Admin sees all, manager sees profiles visible via RLS
-  const { data: profiles, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .order('full_name');
+  // Fetch profiles not already in this team (bypasses RLS via SECURITY DEFINER)
+  const { data: available, error } = await supabase
+    .rpc('get_available_profiles_for_team', { target_team_id: currentTeamId });
 
   if (error) {
     console.error('Profiles fetch error:', error);
@@ -342,16 +343,12 @@ async function openMemberModal() {
     return;
   }
 
-  // Filter out people already in this team
-  const existingIds = new Set(currentMembers.map((m) => m.profile?.id));
-  const available = (profiles || []).filter((p) => !existingIds.has(p.id));
-
   const select = document.getElementById('member-profile');
   select.innerHTML = '<option value="">— Select a person —</option>';
   available.forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.full_name} (${p.role})`;
+    opt.textContent = p.role === 'admin' ? `${p.full_name} (admin)` : p.full_name;
     select.appendChild(opt);
   });
 

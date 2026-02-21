@@ -6,9 +6,10 @@ import { supabase } from '@shared/supabase.js';
  *
  * @param {object} options
  * @param {string} [options.activePage] - Current page key to highlight in nav (e.g. 'dashboard', 'schedule')
- * @param {string} [options.role] - User role ('admin', 'manager', 'employee') — controls which links are shown
+ * @param {string} [options.role] - User role ('admin' | 'employee') — controls which links are shown
+ * @param {boolean} [options.isTeamManager] - Whether the user manages at least one team
  */
-export function renderNavbar({ activePage = '', role = 'employee' } = {}) {
+export function renderNavbar({ activePage = '', role = 'employee', isTeamManager = false } = {}) {
   const navLinks = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: 'bi-speedometer2' },
     { key: 'schedule', label: 'Schedule', href: '/schedule.html', icon: 'bi-calendar3' },
@@ -18,8 +19,8 @@ export function renderNavbar({ activePage = '', role = 'employee' } = {}) {
     // { key: 'profile', label: 'Profile', href: '/profile.html', icon: 'bi-person-circle' },
   ];
 
-  // Teams link visible only to managers and admins
-  if (role === 'manager' || role === 'admin') {
+  // Teams link visible to admins and team managers
+  if (role === 'admin' || isTeamManager) {
     navLinks.push({ key: 'teams', label: 'Teams', href: '/teams.html', icon: 'bi-people' });
   }
 

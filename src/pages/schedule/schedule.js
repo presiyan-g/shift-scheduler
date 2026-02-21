@@ -39,9 +39,18 @@ async function init() {
 
   userRole = profile.role;
   isAdmin = userRole === 'admin';
-  isManager = userRole === 'manager' || isAdmin;
 
-  renderNavbar({ activePage: 'schedule', role: userRole });
+  // Fetch managed teams early to determine manager status
+  if (isAdmin) {
+    managedTeams = (await getAllTeams()).map((t) => ({ team: t }));
+  } else {
+    managedTeams = await getManagedTeams(currentUser.id);
+  }
+
+  const isTeamManager = managedTeams.length > 0;
+  isManager = isAdmin || isTeamManager;
+
+  renderNavbar({ activePage: 'schedule', role: userRole, isTeamManager });
 
   // Subtitle text
   document.getElementById('schedule-subtitle').textContent = isManager
@@ -50,13 +59,6 @@ async function init() {
 
   if (isManager) {
     document.getElementById('add-shift-btn').classList.remove('d-none');
-
-    // Load teams for the team filter and modal dropdown
-    if (isAdmin) {
-      managedTeams = (await getAllTeams()).map((t) => ({ team: t }));
-    } else {
-      managedTeams = await getManagedTeams(currentUser.id);
-    }
 
     const teamFilter = document.getElementById('team-filter');
     const teamField = document.getElementById('team-field');
