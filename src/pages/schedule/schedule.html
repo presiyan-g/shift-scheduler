@@ -35,14 +35,37 @@
       </div>
     </div>
 
+    <!-- View toggle -->
+    <div class="d-flex justify-content-center mb-3">
+      <div class="btn-group btn-group-sm" role="group" aria-label="View toggle">
+        <button type="button" class="btn btn-primary active" id="view-week-btn">
+          <i class="bi bi-calendar-week me-1"></i>Week
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="view-month-btn">
+          <i class="bi bi-calendar-month me-1"></i>Month
+        </button>
+      </div>
+    </div>
+
     <!-- Week navigation -->
-    <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3" id="week-nav">
       <button class="btn btn-outline-secondary btn-sm" id="prev-week-btn" type="button">
         <i class="bi bi-chevron-left me-1"></i>Prev Week
       </button>
       <span class="fw-semibold text-center" id="week-label">Loading week...</span>
       <button class="btn btn-outline-secondary btn-sm" id="next-week-btn" type="button">
         Next Week<i class="bi bi-chevron-right ms-1"></i>
+      </button>
+    </div>
+
+    <!-- Month navigation (hidden by default) -->
+    <div class="d-flex align-items-center justify-content-between mb-3 d-none" id="month-nav">
+      <button class="btn btn-outline-secondary btn-sm" id="prev-month-btn" type="button">
+        <i class="bi bi-chevron-left me-1"></i>Prev Month
+      </button>
+      <span class="fw-semibold text-center" id="month-label">Loading month...</span>
+      <button class="btn btn-outline-secondary btn-sm" id="next-month-btn" type="button">
+        Next Month<i class="bi bi-chevron-right ms-1"></i>
       </button>
     </div>
 
@@ -56,6 +79,12 @@
 
     <!-- Week grid — 7 day columns injected by JS -->
     <div class="row g-2" id="week-grid"></div>
+
+    <!-- Monthly calendar grid for employees -->
+    <div class="d-none" id="month-calendar-grid"></div>
+
+    <!-- Monthly matrix/roster for managers -->
+    <div class="d-none" id="month-matrix-container"></div>
 
   </main>
 

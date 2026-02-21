@@ -14,10 +14,14 @@ let isAdmin = false;
 let managedTeams = [];       // teams the current manager manages
 let selectedTeamId = null;   // currently selected team filter (null = all)
 let employees = [];          // [{ id, full_name }] — loaded for the selected team
-let currentShifts = [];      // cached after each loadWeek() for edit/delete lookup
+let currentShifts = [];      // cached after each loadWeek()/loadMonth() for edit/delete lookup
 let pendingDeleteId = null;  // shift UUID awaiting deletion confirm
 let shiftModalInstance = null;
 let deleteModalInstance = null;
+
+// Monthly view state
+let currentView = 'week';       // 'week' | 'month'
+let currentMonthDate = null;    // Date object — 1st of the displayed month
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -114,6 +118,7 @@ async function init() {
   }
 
   currentWeekStart = getWeekStart(new Date());
+  currentMonthDate = getMonthStart(new Date());
 
   // Bootstrap modal instances
   shiftModalInstance = new bootstrap.Modal(document.getElementById('shift-modal'));
@@ -132,6 +137,15 @@ async function init() {
 // ── Event listeners ──────────────────────────────────────────────────────────
 
 function attachEventListeners() {
+  // View toggle
+  document.getElementById('view-week-btn').addEventListener('click', () => {
+    if (currentView !== 'week') switchView('week');
+  });
+  document.getElementById('view-month-btn').addEventListener('click', () => {
+    if (currentView !== 'month') switchView('month');
+  });
+
+  // Week navigation
   document.getElementById('prev-week-btn').addEventListener('click', () => {
     currentWeekStart.setDate(currentWeekStart.getDate() - 7);
     loadWeek();
@@ -140,6 +154,16 @@ function attachEventListeners() {
   document.getElementById('next-week-btn').addEventListener('click', () => {
     currentWeekStart.setDate(currentWeekStart.getDate() + 7);
     loadWeek();
+  });
+
+  // Month navigation
+  document.getElementById('prev-month-btn').addEventListener('click', () => {
+    currentMonthDate.setMonth(currentMonthDate.getMonth() - 1);
+    loadMonth();
+  });
+  document.getElementById('next-month-btn').addEventListener('click', () => {
+    currentMonthDate.setMonth(currentMonthDate.getMonth() + 1);
+    loadMonth();
   });
 
   document.getElementById('add-shift-btn').addEventListener('click', () => {
@@ -168,7 +192,11 @@ function attachEventListeners() {
     if (selectedTeamId) {
       await fetchEmployeesForTeam(selectedTeamId);
     }
-    await loadWeek();
+    if (currentView === 'week') {
+      await loadWeek();
+    } else {
+      await loadMonth();
+    }
   });
 
   // Team dropdown in shift modal — reload employees when team changes
@@ -183,9 +211,122 @@ function attachEventListeners() {
       employees = [];
     }
   });
+
+  // Employee calendar: click a day cell to navigate to that week
+  document.getElementById('month-calendar-grid').addEventListener('click', (e) => {
+    const cell = e.target.closest('.month-cal-cell');
+    if (cell && cell.dataset.date) {
+      const clickedDate = new Date(cell.dataset.date + 'T00:00:00');
+      currentWeekStart = getWeekStart(clickedDate);
+      switchView('week');
+    }
+  });
+
+  // Manager matrix: click shift pill to edit, click empty cell to add
+  document.getElementById('month-matrix-container').addEventListener('click', (e) => {
+    const pill = e.target.closest('.matrix-shift-pill');
+    if (pill) {
+      openShiftModal(pill.dataset.shiftId);
+      return;
+    }
+
+    const cell = e.target.closest('.month-matrix-cell');
+    if (cell && cell.dataset.date && cell.dataset.employee) {
+      openShiftModalPrefilled(cell.dataset.date, cell.dataset.employee);
+    }
+  });
+}
+
+// ── View toggle ─────────────────────────────────────────────────────────────
+
+function switchView(view) {
+  currentView = view;
+
+  const weekBtn = document.getElementById('view-week-btn');
+  const monthBtn = document.getElementById('view-month-btn');
+  weekBtn.classList.toggle('btn-primary', view === 'week');
+  weekBtn.classList.toggle('btn-outline-primary', view !== 'week');
+  weekBtn.classList.toggle('active', view === 'week');
+  monthBtn.classList.toggle('btn-primary', view === 'month');
+  monthBtn.classList.toggle('btn-outline-primary', view !== 'month');
+  monthBtn.classList.toggle('active', view === 'month');
+
+  document.getElementById('week-nav').classList.toggle('d-none', view !== 'week');
+  document.getElementById('month-nav').classList.toggle('d-none', view !== 'month');
+
+  document.getElementById('week-grid').classList.toggle('d-none', view !== 'week');
+  document.getElementById('month-calendar-grid').classList.toggle('d-none', view !== 'month' || isManager);
+  document.getElementById('month-matrix-container').classList.toggle('d-none', view !== 'month' || !isManager);
+
+  const subtitleEl = document.getElementById('schedule-subtitle');
+  if (view === 'week') {
+    subtitleEl.textContent = isManager
+      ? 'Viewing team shifts for the week'
+      : 'Viewing your shifts for the week';
+    loadWeek();
+  } else {
+    subtitleEl.textContent = isManager
+      ? 'Viewing team shifts for the month'
+      : 'Viewing your shifts for the month';
+    if (!currentMonthDate) {
+      currentMonthDate = getMonthStart(currentWeekStart);
+    }
+    loadMonth();
+  }
 }
 
 // ── Data fetching ────────────────────────────────────────────────────────────
+
+async function loadMonth() {
+  const loading = document.getElementById('schedule-loading');
+  const calGrid = document.getElementById('month-calendar-grid');
+  const matrixContainer = document.getElementById('month-matrix-container');
+  const activeGrid = isManager ? matrixContainer : calGrid;
+  const inactiveGrid = isManager ? calGrid : matrixContainer;
+
+  loading.classList.remove('d-none');
+  activeGrid.classList.add('d-none');
+  inactiveGrid.classList.add('d-none');
+
+  document.getElementById('month-label').textContent = formatMonthLabel(currentMonthDate);
+
+  const monthStart = getMonthStart(currentMonthDate);
+  const monthEnd = getMonthEnd(currentMonthDate);
+  const startStr = toDateString(monthStart);
+  const endStr = toDateString(monthEnd);
+
+  let query = supabase
+    .from('shifts')
+    .select('*, employee:profiles!employee_id(full_name)')
+    .gte('shift_date', startStr)
+    .lte('shift_date', endStr)
+    .order('start_time', { ascending: true });
+
+  if (selectedTeamId) {
+    query = query.eq('team_id', selectedTeamId);
+  }
+
+  const { data: shifts, error } = await query;
+
+  if (error) {
+    console.error('Month shifts fetch error:', error);
+    showToast('Could not load shifts.', 'danger');
+    loading.classList.add('d-none');
+    activeGrid.classList.remove('d-none');
+    return;
+  }
+
+  currentShifts = shifts || [];
+
+  if (isManager) {
+    renderMonthMatrix(currentShifts);
+  } else {
+    renderMonthCalendar(currentShifts);
+  }
+
+  loading.classList.add('d-none');
+  activeGrid.classList.remove('d-none');
+}
 
 async function loadWeek() {
   const loading = document.getElementById('schedule-loading');
@@ -344,6 +485,167 @@ function buildShiftCardHtml(shift) {
   `;
 }
 
+// ── Monthly renderers ────────────────────────────────────────────────────────
+
+function renderMonthCalendar(shifts) {
+  const grid = document.getElementById('month-calendar-grid');
+  grid.innerHTML = '';
+
+  const today = toDateString(new Date());
+  const calendarDays = getCalendarDays(currentMonthDate);
+  const currentMonth = currentMonthDate.getMonth();
+
+  // Build shifts lookup: dateString -> [shift, ...]
+  const shiftsByDate = {};
+  shifts.forEach((s) => {
+    if (!shiftsByDate[s.shift_date]) shiftsByDate[s.shift_date] = [];
+    shiftsByDate[s.shift_date].push(s);
+  });
+
+  let html = '<div class="month-calendar">';
+  html += '<div class="month-cal-header">';
+  ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((day) => {
+    html += `<div class="month-cal-header-cell">${day}</div>`;
+  });
+  html += '</div>';
+
+  html += '<div class="month-cal-body">';
+  calendarDays.forEach((dayDate) => {
+    const dateStr = toDateString(dayDate);
+    const isToday = dateStr === today;
+    const isCurrentMonth = dayDate.getMonth() === currentMonth;
+    const dayShifts = shiftsByDate[dateStr] || [];
+
+    const todayClass = isToday ? ' month-cal-today' : '';
+    const dimClass = !isCurrentMonth ? ' month-cal-outside' : '';
+
+    let cellContent = `<div class="month-cal-day-number${isToday ? ' text-primary fw-bold' : ''}">${dayDate.getDate()}</div>`;
+
+    const maxVisible = 3;
+    const visible = dayShifts.slice(0, maxVisible);
+    const remaining = dayShifts.length - maxVisible;
+
+    visible.forEach((s) => {
+      const statusClass = `shift-status-${s.status}`;
+      cellContent += `
+        <div class="month-cal-shift ${statusClass}" title="${escapeHtml(s.title)} ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}">
+          <span class="month-cal-shift-time">${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}</span>
+          <span class="month-cal-shift-title text-truncate">${escapeHtml(s.title || 'Shift')}</span>
+        </div>
+      `;
+    });
+
+    if (remaining > 0) {
+      cellContent += `<div class="month-cal-more text-muted">+${remaining} more</div>`;
+    }
+
+    html += `<div class="month-cal-cell${todayClass}${dimClass}" data-date="${dateStr}">${cellContent}</div>`;
+  });
+  html += '</div></div>';
+
+  grid.innerHTML = html;
+}
+
+function renderMonthMatrix(shifts) {
+  const container = document.getElementById('month-matrix-container');
+  container.innerHTML = '';
+
+  const today = toDateString(new Date());
+  const daysInMonth = getDaysInMonth(currentMonthDate);
+  const monthNum = currentMonthDate.getMonth();
+  const year = currentMonthDate.getFullYear();
+
+  // Group shifts by employee_id -> date -> [shifts]
+  const shiftMap = {};
+  const employeeMap = {};
+
+  shifts.forEach((s) => {
+    const empId = s.employee_id;
+    if (!shiftMap[empId]) shiftMap[empId] = {};
+    if (!shiftMap[empId][s.shift_date]) shiftMap[empId][s.shift_date] = [];
+    shiftMap[empId][s.shift_date].push(s);
+
+    if (!employeeMap[empId]) {
+      employeeMap[empId] = {
+        id: empId,
+        full_name: s.employee?.full_name || 'Unknown',
+      };
+    }
+  });
+
+  const sortedEmployees = Object.values(employeeMap).sort((a, b) =>
+    a.full_name.localeCompare(b.full_name)
+  );
+
+  if (sortedEmployees.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-calendar-x display-6 d-block mb-2 opacity-50"></i>
+        No shifts found for this month.
+      </div>
+    `;
+    return;
+  }
+
+  let html = '<div class="month-matrix-wrapper">';
+  html += '<table class="month-matrix-table">';
+
+  // Header row
+  html += '<thead><tr><th class="month-matrix-employee-header">Employee</th>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, monthNum, d);
+    const dateStr = toDateString(dateObj);
+    const isToday = dateStr === today;
+    const dayAbbr = dateObj.toLocaleDateString('en-US', { weekday: 'narrow' });
+    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+
+    html += `<th class="month-matrix-day-header${isToday ? ' matrix-today-header' : ''}${isWeekend ? ' matrix-weekend' : ''}">
+      <div class="matrix-day-abbr">${dayAbbr}</div>
+      <div class="matrix-day-num">${d}</div>
+    </th>`;
+  }
+  html += '</tr></thead>';
+
+  // Body: one row per employee
+  html += '<tbody>';
+  sortedEmployees.forEach((emp) => {
+    html += '<tr>';
+    html += `<td class="month-matrix-employee-name">${escapeHtml(emp.full_name)}</td>`;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = toDateString(new Date(year, monthNum, d));
+      const isToday = dateStr === today;
+      const dateObj = new Date(year, monthNum, d);
+      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+      const cellShifts = shiftMap[emp.id]?.[dateStr] || [];
+
+      let cellHtml = '';
+      cellShifts.forEach((s) => {
+        const statusColor = {
+          scheduled: 'primary',
+          completed: 'success',
+          cancelled: 'danger',
+        }[s.status] || 'secondary';
+
+        cellHtml += `<div class="matrix-shift-pill badge bg-${statusColor}-subtle text-${statusColor}"
+          data-shift-id="${s.id}"
+          title="${escapeHtml(s.title)}: ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}">
+          ${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}
+        </div>`;
+      });
+
+      const todayClass = isToday ? ' matrix-today-cell' : '';
+      const weekendClass = isWeekend ? ' matrix-weekend' : '';
+      html += `<td class="month-matrix-cell${todayClass}${weekendClass}" data-date="${dateStr}" data-employee="${emp.id}">${cellHtml}</td>`;
+    }
+
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  container.innerHTML = html;
+}
+
 // ── Modal: Shift create / edit ───────────────────────────────────────────────
 
 function openShiftModal(shiftId) {
@@ -389,6 +691,14 @@ function openShiftModal(shiftId) {
   }
 
   shiftModalInstance.show();
+}
+
+function openShiftModalPrefilled(dateStr, employeeId) {
+  openShiftModal(null);
+  document.getElementById('shift-date').value = dateStr;
+  if (employeeId) {
+    document.getElementById('shift-employee').value = employeeId;
+  }
 }
 
 async function handleShiftSave() {
@@ -439,7 +749,11 @@ async function handleShiftSave() {
 
   shiftModalInstance.hide();
   showToast(isEdit ? 'Shift updated.' : 'Shift created.', 'success');
-  await loadWeek();
+  if (currentView === 'week') {
+    await loadWeek();
+  } else {
+    await loadMonth();
+  }
 }
 
 // ── Modal: Delete confirm ────────────────────────────────────────────────────
@@ -471,7 +785,11 @@ async function handleDeleteConfirm() {
   deleteModalInstance.hide();
   pendingDeleteId = null;
   showToast('Shift deleted.', 'success');
-  await loadWeek();
+  if (currentView === 'week') {
+    await loadWeek();
+  } else {
+    await loadMonth();
+  }
 }
 
 // ── Date / time helpers ──────────────────────────────────────────────────────
@@ -507,6 +825,54 @@ function formatWeekLabel(weekStart) {
   const start = weekStart.toLocaleDateString('en-US', opts);
   const end = weekEnd.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
   return `${start} – ${end}`;
+}
+
+function getMonthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getMonthEnd(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getDaysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function getCalendarDays(monthDate) {
+  const first = getMonthStart(monthDate);
+  const last = getMonthEnd(monthDate);
+
+  const startDay = first.getDay(); // 0=Sun
+  const leadingDays = startDay === 0 ? 6 : startDay - 1;
+  const calStart = new Date(first);
+  calStart.setDate(calStart.getDate() - leadingDays);
+
+  const endDay = last.getDay();
+  const trailingDays = endDay === 0 ? 0 : 7 - endDay;
+  const calEnd = new Date(last);
+  calEnd.setDate(calEnd.getDate() + trailingDays);
+
+  const days = [];
+  const d = new Date(calStart);
+  while (d <= calEnd) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
+function formatMonthLabel(date) {
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function formatTimeShort(timeStr) {
+  if (!timeStr) return '';
+  const [h] = timeStr.split(':');
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? 'p' : 'a';
+  const h12 = hour % 12 || 12;
+  return `${h12}${ampm}`;
 }
 
 function formatTime(timeStr) {

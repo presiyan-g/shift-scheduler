@@ -106,7 +106,25 @@ async function init() {
 
   const { data: weekShifts } = await weekQuery;
   const totalHours = calcTotalHours(weekShifts || []);
-  document.getElementById('stat-hours-week').textContent = totalHours.toFixed(1);
+  document.getElementById('stat-hours-week').textContent = `${totalHours.toFixed(1)} hrs`;
+
+  // Hours this month
+  const endOfMonth = getEndOfMonth();
+
+  let monthHoursQuery = supabase
+    .from('shifts')
+    .select('start_time, end_time')
+    .gte('shift_date', startOfMonth)
+    .lte('shift_date', endOfMonth)
+    .in('status', ['scheduled', 'completed']);
+
+  if (!isManager) {
+    monthHoursQuery = monthHoursQuery.eq('employee_id', user.id);
+  }
+
+  const { data: monthShifts } = await monthHoursQuery;
+  const totalMonthHours = calcTotalHours(monthShifts || []);
+  document.getElementById('stat-hours-month').textContent = totalMonthHours.toFixed(1);
 
   // Completed this month
   let monthQuery = supabase
@@ -185,6 +203,12 @@ function getEndOfWeek() {
 function getStartOfMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function getEndOfMonth() {
+  const d = new Date();
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return toDateString(lastDay);
 }
 
 // ── Formatting helpers ──
