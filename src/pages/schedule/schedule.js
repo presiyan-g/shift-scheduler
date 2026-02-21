@@ -24,6 +24,8 @@ let deleteModalInstance = null;
 async function init() {
   currentUser = await requireAuth();
 
+  renderNavbar({ activePage: 'schedule' });
+
   // Fetch profile to determine role
   const { data: profile, error: profileError } = await supabase
     .from('profiles')

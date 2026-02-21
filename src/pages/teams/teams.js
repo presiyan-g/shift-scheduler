@@ -25,6 +25,8 @@ let deleteModalInstance = null;
 async function init() {
   currentUser = await requireAuth();
 
+  renderNavbar({ activePage: 'teams' });
+
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('full_name, role')

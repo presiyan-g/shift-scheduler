@@ -7,6 +7,8 @@ import { getManagedTeams } from '@shared/teams.js';
 async function init() {
   const user = await requireAuth();
 
+  renderNavbar({ activePage: 'dashboard' });
+
   // 1. Fetch profile to get full_name and role
   const { data: profile, error: profileError } = await supabase
     .from('profiles')

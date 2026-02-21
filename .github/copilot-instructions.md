@@ -1,4 +1,4 @@
-# CLAUDE.md — Shift Scheduler
+# copilot-instructions.md — Shift Scheduler
 
 ## Project Overview
 
@@ -133,7 +133,7 @@ supabase/
 ## Pages and Navigation
 - Split the app into multiple HTML pages.
 - Use routing to navigate between pages.
-- Use full URL paths (e.g. `/dashboard.html`) instead of hash-based routing.
+- Use full URL paths (e.g. `/dashboard`) instead of hash-based routing.
 
 ## UI Guidelines
 
