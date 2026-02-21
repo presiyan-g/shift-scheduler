@@ -12,13 +12,97 @@
 
   <!-- Navbar rendered by shared/navbar.js -->
 
-  <main class="container py-5 text-center">
-    <div class="py-5">
-      <i class="bi bi-hammer display-1 text-primary opacity-50"></i>
-      <h1 class="fw-bold mt-4">Dashboard</h1>
-      <p class="text-muted fs-5">Coming soon — this page is under construction.</p>
-      <p class="text-muted">You're logged in successfully!</p>
+  <main class="container py-4">
+
+    <!-- Welcome header -->
+    <div class="mb-4">
+      <h1 class="fw-bold fs-3" id="welcome-heading">Welcome back!</h1>
+      <p class="text-muted mb-0" id="welcome-sub">Here's your schedule overview.</p>
     </div>
+
+    <!-- Stats cards row -->
+    <div class="row g-3 mb-4" id="stats-row">
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="mb-2"><i class="bi bi-calendar-event fs-3 text-primary"></i></div>
+            <h3 class="fw-bold mb-0" id="stat-upcoming">--</h3>
+            <small class="text-muted">Upcoming Shifts</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="mb-2"><i class="bi bi-clock-history fs-3 text-success"></i></div>
+            <h3 class="fw-bold mb-0" id="stat-hours-week">--</h3>
+            <small class="text-muted">Hours This Week</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="mb-2"><i class="bi bi-check-circle fs-3 text-info"></i></div>
+            <h3 class="fw-bold mb-0" id="stat-completed">--</h3>
+            <small class="text-muted">Completed This Month</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body text-center">
+            <div class="mb-2"><i class="bi bi-calendar-check fs-3 text-warning"></i></div>
+            <h3 class="fw-bold mb-0" id="stat-today">--</h3>
+            <small class="text-muted">Today's Shifts</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manager-only: team overview banner (hidden for employees) -->
+    <div class="alert alert-primary d-flex align-items-center mb-4 d-none" id="manager-banner">
+      <i class="bi bi-people-fill me-2 fs-5"></i>
+      <div>
+        <strong>Team Overview:</strong>
+        <span id="manager-team-summary">Loading team data...</span>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Left column: Upcoming shifts -->
+      <div class="col-12 col-lg-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-calendar3 me-2 text-primary"></i>Upcoming Shifts</h5>
+            <span class="badge bg-primary rounded-pill" id="upcoming-count">0</span>
+          </div>
+          <div class="card-body p-0" id="upcoming-shifts-list">
+            <!-- Populated by JS -->
+            <div class="text-center py-5 text-muted" id="upcoming-empty">
+              <i class="bi bi-calendar-x display-6 d-block mb-2 opacity-50"></i>
+              No upcoming shifts scheduled.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: Recent/past shifts -->
+      <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom">
+            <h5 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-muted"></i>Recent Shifts</h5>
+          </div>
+          <div class="card-body p-0" id="recent-shifts-list">
+            <!-- Populated by JS -->
+            <div class="text-center py-4 text-muted" id="recent-empty">
+              <small>No recent shifts.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
