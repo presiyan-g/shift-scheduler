@@ -29,7 +29,7 @@ async function init() {
   // Fetch profile to determine role
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, avatar_url')
     .eq('id', currentUser.id)
     .single();
 
@@ -52,7 +52,7 @@ async function init() {
   const isTeamManager = managedTeams.length > 0;
   isManager = isAdmin || isTeamManager;
 
-  renderNavbar({ activePage: 'schedule', role: userRole, isTeamManager });
+  renderNavbar({ activePage: 'schedule', role: userRole, isTeamManager, userName: profile.full_name, avatarUrl: profile.avatar_url });
 
   // Subtitle text
   document.getElementById('schedule-subtitle').textContent = isManager

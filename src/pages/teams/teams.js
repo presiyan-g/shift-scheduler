@@ -29,7 +29,7 @@ async function init() {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, avatar_url')
     .eq('id', currentUser.id)
     .single();
 
@@ -53,7 +53,7 @@ async function init() {
     }
   }
 
-  renderNavbar({ activePage: 'teams', role: userRole, isTeamManager });
+  renderNavbar({ activePage: 'teams', role: userRole, isTeamManager, userName: profile.full_name, avatarUrl: profile.avatar_url });
 
   // Admin-only controls
   if (isAdmin) {

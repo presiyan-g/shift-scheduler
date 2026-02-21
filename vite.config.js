@@ -14,6 +14,8 @@ const pageRewrites = {
   '/dashboard.html': '/src/pages/dashboard/dashboard.html',
   '/schedule.html':  '/src/pages/schedule/schedule.html',
   '/teams.html':     '/src/pages/teams/teams.html',
+  '/profile.html':   '/src/pages/profile/profile.html',
+  '/account.html':   '/src/pages/account/account.html',
 };
 
 const rewritePlugin = {
@@ -45,6 +47,8 @@ export default defineConfig({
         dashboard: resolve(__dirname, 'src/pages/dashboard/dashboard.html'),
         schedule:  resolve(__dirname, 'src/pages/schedule/schedule.html'),
         teams:     resolve(__dirname, 'src/pages/teams/teams.html'),
+        profile:   resolve(__dirname, 'src/pages/profile/profile.html'),
+        account:   resolve(__dirname, 'src/pages/account/account.html'),
       },
     },
   },

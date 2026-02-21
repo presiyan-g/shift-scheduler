@@ -12,7 +12,7 @@ async function init() {
   // 1. Fetch profile to get full_name and role
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, avatar_url')
     .eq('id', user.id)
     .single();
 
@@ -27,7 +27,7 @@ async function init() {
   const isTeamManager = managedTeams.length > 0;
   const isManager = profile.role === 'admin' || isTeamManager;
 
-  renderNavbar({ activePage: 'dashboard', role: profile.role, isTeamManager });
+  renderNavbar({ activePage: 'dashboard', role: profile.role, isTeamManager, userName: profile.full_name, avatarUrl: profile.avatar_url });
 
   // 2. Set welcome message
   const firstName = profile.full_name?.split(' ')[0] || 'there';

@@ -8,8 +8,16 @@ import { supabase } from '@shared/supabase.js';
  * @param {string} [options.activePage] - Current page key to highlight in nav (e.g. 'dashboard', 'schedule')
  * @param {string} [options.role] - User role ('admin' | 'employee') — controls which links are shown
  * @param {boolean} [options.isTeamManager] - Whether the user manages at least one team
+ * @param {string} [options.userName] - Display name for the avatar dropdown
+ * @param {string|null} [options.avatarUrl] - URL to the user's avatar image
  */
-export function renderNavbar({ activePage = '', role = 'employee', isTeamManager = false } = {}) {
+export function renderNavbar({
+  activePage = '',
+  role = 'employee',
+  isTeamManager = false,
+  userName = '',
+  avatarUrl = null,
+} = {}) {
   const existingNavbar = document.getElementById('main-navbar');
   if (existingNavbar) {
     existingNavbar.remove();
@@ -21,7 +29,6 @@ export function renderNavbar({ activePage = '', role = 'employee', isTeamManager
     // Future pages — uncomment as they are built:
     // { key: 'swaps', label: 'Swaps', href: '/swaps.html', icon: 'bi-arrow-left-right' },
     // { key: 'leave', label: 'Leave', href: '/leave.html', icon: 'bi-airplane' },
-    // { key: 'profile', label: 'Profile', href: '/profile.html', icon: 'bi-person-circle' },
   ];
 
   // Teams link visible to admins and team managers
@@ -40,6 +47,9 @@ export function renderNavbar({ activePage = '', role = 'employee', isTeamManager
     )
     .join('');
 
+  const avatarHtml = buildAvatarHtml(userName, avatarUrl);
+  const displayName = escapeHtml(userName) || 'Account';
+
   const nav = document.createElement('nav');
   nav.id = 'main-navbar';
   nav.className = 'navbar navbar-expand-lg navbar-dark bg-primary';
@@ -57,9 +67,39 @@ export function renderNavbar({ activePage = '', role = 'employee', isTeamManager
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           ${linksHtml}
         </ul>
-        <button id="logout-btn" class="btn btn-outline-light btn-sm">
-          <i class="bi bi-box-arrow-right me-1"></i>Log Out
-        </button>
+        <div class="dropdown">
+          <button
+            class="btn btn-link p-0 d-flex align-items-center gap-2 text-white text-decoration-none"
+            type="button"
+            id="user-menu-btn"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <span class="navbar-avatar-bubble">
+              ${avatarHtml}
+            </span>
+            <span class="d-none d-md-inline fw-medium small">${displayName}</span>
+            <i class="bi bi-chevron-down small"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" aria-labelledby="user-menu-btn">
+            <li>
+              <a class="dropdown-item" href="/profile.html">
+                <i class="bi bi-person-circle me-2"></i>Profile
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="/account.html">
+                <i class="bi bi-gear me-2"></i>Account
+              </a>
+            </li>
+            <li><hr class="dropdown-divider" /></li>
+            <li>
+              <button class="dropdown-item text-danger" type="button" id="logout-btn">
+                <i class="bi bi-box-arrow-right me-2"></i>Log Out
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   `;
@@ -71,4 +111,36 @@ export function renderNavbar({ activePage = '', role = 'employee', isTeamManager
     await supabase.auth.signOut();
     window.location.replace('/login.html');
   });
+}
+
+// ── Internal helpers ────────────────────────────────────────────────────────
+
+function buildAvatarHtml(userName, avatarUrl) {
+  if (avatarUrl) {
+    return `<img
+      src="${escapeHtml(avatarUrl)}"
+      alt="Avatar"
+      class="navbar-avatar-img"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+    /><span class="navbar-avatar-initials" style="display:none">${getInitials(userName)}</span>`;
+  }
+  if (userName) {
+    return `<span class="navbar-avatar-initials">${getInitials(userName)}</span>`;
+  }
+  return `<i class="bi bi-person-fill"></i>`;
+}
+
+function getInitials(name) {
+  return (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
 }
