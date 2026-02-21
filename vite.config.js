@@ -12,6 +12,7 @@ const pageRewrites = {
   '/login.html':     '/src/pages/login/login.html',
   '/register.html':  '/src/pages/register/register.html',
   '/dashboard.html': '/src/pages/dashboard/dashboard.html',
+  '/schedule.html':  '/src/pages/schedule/schedule.html',
 };
 
 const rewritePlugin = {
@@ -41,6 +42,7 @@ export default defineConfig({
         login:     resolve(__dirname, 'src/pages/login/login.html'),
         register:  resolve(__dirname, 'src/pages/register/register.html'),
         dashboard: resolve(__dirname, 'src/pages/dashboard/dashboard.html'),
+        schedule:  resolve(__dirname, 'src/pages/schedule/schedule.html'),
       },
     },
   },

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <title>Schedule — ShiftScheduler</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <link rel="stylesheet" href="/src/pages/schedule/schedule.css" />
+</head>
+<body class="bg-light">
+
+  <!-- Navbar rendered by shared/navbar.js -->
+
+  <main class="container-fluid py-4 px-3 px-md-4">
+
+    <!-- Page header -->
+    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+      <div>
+        <h1 class="fw-bold fs-3 mb-0">
+          <i class="bi bi-calendar3 me-2 text-primary"></i>Team Schedule
+        </h1>
+        <p class="text-muted mb-0 small" id="schedule-subtitle">Loading...</p>
+      </div>
+      <!-- Manager-only: shown by JS when role is manager/admin -->
+      <button class="btn btn-primary d-none" id="add-shift-btn" type="button">
+        <i class="bi bi-plus-lg me-1"></i>Add Shift
+      </button>
+    </div>
+
+    <!-- Week navigation -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <button class="btn btn-outline-secondary btn-sm" id="prev-week-btn" type="button">
+        <i class="bi bi-chevron-left me-1"></i>Prev Week
+      </button>
+      <span class="fw-semibold text-center" id="week-label">Loading week...</span>
+      <button class="btn btn-outline-secondary btn-sm" id="next-week-btn" type="button">
+        Next Week<i class="bi bi-chevron-right ms-1"></i>
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    <div class="d-none" id="schedule-loading">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="text-muted mt-2 mb-0">Loading shifts...</p>
+    </div>
+
+    <!-- Week grid — 7 day columns injected by JS -->
+    <div class="row g-2" id="week-grid"></div>
+
+  </main>
+
+  <!-- ── Shift Modal (Create / Edit) ── -->
+  <div class="modal fade" id="shift-modal" tabindex="-1" aria-labelledby="shift-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="shift-modal-label">Add Shift</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body pt-2">
+          <form id="shift-form" novalidate>
+
+            <!-- Hidden shift ID for edit mode -->
+            <input type="hidden" id="shift-id" />
+
+            <!-- Employee dropdown (hidden for employees, shown for managers) -->
+            <div class="mb-3" id="employee-field">
+              <label for="shift-employee" class="form-label fw-medium">Employee</label>
+              <select class="form-select" id="shift-employee" required>
+                <option value="">— Select employee —</option>
+              </select>
+              <div class="invalid-feedback">Please select an employee.</div>
+            </div>
+
+            <!-- Title -->
+            <div class="mb-3">
+              <label for="shift-title" class="form-label fw-medium">Title</label>
+              <input
+                type="text"
+                class="form-control"
+                id="shift-title"
+                placeholder="e.g. Morning Shift"
+                required
+                maxlength="100"
+              />
+              <div class="invalid-feedback">Please enter a shift title.</div>
+            </div>
+
+            <!-- Date -->
+            <div class="mb-3">
+              <label for="shift-date" class="form-label fw-medium">Date</label>
+              <input type="date" class="form-control" id="shift-date" required />
+              <div class="invalid-feedback">Please select a date.</div>
+            </div>
+
+            <!-- Start / End time -->
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label for="shift-start" class="form-label fw-medium">Start Time</label>
+                <input type="time" class="form-control" id="shift-start" required />
+                <div class="invalid-feedback">Required.</div>
+              </div>
+              <div class="col-6">
+                <label for="shift-end" class="form-label fw-medium">End Time</label>
+                <input type="time" class="form-control" id="shift-end" required />
+                <div class="invalid-feedback">Required.</div>
+              </div>
+            </div>
+
+            <!-- Status (edit mode only) -->
+            <div class="mb-3 d-none" id="status-field">
+              <label for="shift-status" class="form-label fw-medium">Status</label>
+              <select class="form-select" id="shift-status">
+                <option value="scheduled">Scheduled</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <!-- Notes -->
+            <div class="mb-3">
+              <label for="shift-notes" class="form-label fw-medium">
+                Notes <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <textarea
+                class="form-control"
+                id="shift-notes"
+                rows="2"
+                maxlength="500"
+                placeholder="Any additional details..."
+              ></textarea>
+            </div>
+
+          </form>
+        </div>
+
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="shift-save-btn">
+            <span id="shift-save-label">Save Shift</span>
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="shift-save-spinner" role="status" aria-hidden="true"></span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Delete Confirmation Modal ── -->
+  <div class="modal fade" id="delete-modal" tabindex="-1" aria-labelledby="delete-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold text-danger" id="delete-modal-label">
+            <i class="bi bi-trash me-1"></i>Delete Shift
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="mb-0">
+            Are you sure you want to delete
+            <strong id="delete-shift-name">this shift</strong>?
+            This cannot be undone.
+          </p>
+        </div>
+
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger btn-sm" id="confirm-delete-btn">
+            <span id="delete-label">Delete</span>
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="delete-spinner" role="status" aria-hidden="true"></span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/src/pages/schedule/schedule.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+/* ── Day columns ── */
+
+.schedule-day-col {
+  min-width: 0; /* Prevent overflow in flex/grid rows */
+}
+
+.schedule-day-card {
+  min-height: 180px;
+}
+
+/* Today highlight */
+.schedule-day-card.today-card {
+  border: 1px solid var(--bs-primary) !important;
+}
+
+.today-header {
+  background-color: rgba(13, 110, 253, 0.08);
+}
+
+.today-day-label {
+  color: var(--bs-primary);
+}
+
+/* ── Shift cards ── */
+
+.shift-card {
+  background-color: #fff;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  transition: box-shadow 0.15s ease;
+}
+
+.shift-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Status left-border accents */
+.shift-status-scheduled {
+  border-left: 3px solid var(--bs-primary) !important;
+}
+
+.shift-status-completed {
+  border-left: 3px solid var(--bs-success) !important;
+}
+
+.shift-status-cancelled {
+  border-left: 3px solid var(--bs-danger) !important;
+  opacity: 0.65;
+}
+
+/* Compact edit/delete icon buttons */
+.edit-shift-btn,
+.delete-shift-btn {
+  line-height: 1;
+  font-size: 0.72rem;
+}
+
+/* ── Week navigation ── */
+
+#week-label {
+  font-size: 0.95rem;
+}
+
+/* ── Loading state ── */
+
+#schedule-loading {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}

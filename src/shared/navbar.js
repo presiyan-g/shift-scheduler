@@ -11,7 +11,7 @@ export function renderNavbar({ activePage = '' } = {}) {
   const navLinks = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard.html', icon: 'bi-speedometer2' },
     // Future pages — uncomment as they are built:
-    // { key: 'schedule', label: 'Schedule', href: '/schedule.html', icon: 'bi-calendar3' },
+    { key: 'schedule', label: 'Schedule', href: '/schedule.html', icon: 'bi-calendar3' },
     // { key: 'swaps', label: 'Swaps', href: '/swaps.html', icon: 'bi-arrow-left-right' },
     // { key: 'leave', label: 'Leave', href: '/leave.html', icon: 'bi-airplane' },
     // { key: 'profile', label: 'Profile', href: '/profile.html', icon: 'bi-person-circle' },
