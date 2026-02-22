@@ -1,0 +1,53 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/"
+  to = "/src/pages/index/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/src/pages/login/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/register"
+  to = "/src/pages/register/register.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/src/pages/dashboard/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/schedule"
+  to = "/src/pages/schedule/schedule.html"
+  status = 200
+
+[[redirects]]
+  from = "/teams"
+  to = "/src/pages/teams/teams.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile"
+  to = "/src/pages/profile/profile.html"
+  status = 200
+
+[[redirects]]
+  from = "/account"
+  to = "/src/pages/account/account.html"
+  status = 200
+
+[[redirects]]
+  from = "/transfers"
+  to = "/src/pages/transfers/transfers.html"
+  status = 200
+
+[[redirects]]
+  from = "/leave"
+  to = "/src/pages/leave/leave.html"
+  status = 200
