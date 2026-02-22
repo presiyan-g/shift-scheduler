@@ -168,6 +168,8 @@
 
 .month-matrix-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
   border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
   background: #fff;
@@ -204,7 +206,8 @@
 .month-matrix-employee-header {
   font-weight: 700;
   background: var(--bs-light);
-  z-index: 3;
+  z-index: 4;
+  top: 0;
 }
 
 .month-matrix-employee-name {
@@ -217,6 +220,10 @@
   padding: 0.25rem 0.15rem;
   min-width: 52px;
   background: var(--bs-light);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 2px solid var(--bs-border-color) !important;
 }
 
 .matrix-day-abbr {

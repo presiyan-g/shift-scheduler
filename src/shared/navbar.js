@@ -54,7 +54,7 @@ export function renderNavbar({
   nav.id = 'main-navbar';
   nav.className = 'navbar navbar-expand-lg navbar-dark bg-primary';
   nav.innerHTML = `
-    <div class="container">
+    <div class="container-fluid px-4 px-xl-5">
       <a class="navbar-brand fw-bold" href="/dashboard">
         <i class="bi bi-calendar-check me-2"></i>ShiftScheduler
       </a>
