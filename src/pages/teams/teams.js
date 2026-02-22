@@ -20,6 +20,9 @@ let teamModalInstance = null;
 let memberModalInstance = null;
 let deleteModalInstance = null;
 
+let availableProfiles = [];   // full list for filtering
+let selectedProfileId = null; // currently selected id in the picker
+
 // ── Entry point ─────────────────────────────────────────────────────────────
 
 async function init() {
@@ -89,6 +92,39 @@ function attachEventListeners() {
   document.getElementById('team-save-btn').addEventListener('click', handleTeamSave);
   document.getElementById('member-save-btn').addEventListener('click', handleMemberSave);
   document.getElementById('confirm-delete-btn').addEventListener('click', handleDeleteConfirm);
+
+  // Member picker — search input
+  document.getElementById('member-search').addEventListener('focus', () => openMemberPickerList());
+  document.getElementById('member-search').addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    const filtered = availableProfiles.filter((p) =>
+      p.full_name.toLowerCase().includes(term) ||
+      (p.other_teams || []).some((t) => t.toLowerCase().includes(term))
+    );
+    renderMemberPickerList(filtered);
+    openMemberPickerList();
+  });
+
+  // Member picker — prevent blur when clicking inside the list so the item click can register
+  document.getElementById('member-picker-list').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  // Member picker — item selection
+  document.getElementById('member-picker-list').addEventListener('click', (e) => {
+    const item = e.target.closest('.member-picker-item');
+    if (!item) return;
+    selectedProfileId = item.dataset.id;
+    document.getElementById('member-profile').value = selectedProfileId;
+    document.getElementById('member-search').value = item.dataset.name;
+    document.getElementById('member-profile-error').classList.add('d-none');
+    closeMemberPickerList();
+  });
+
+  // Close picker when the search input loses focus
+  document.getElementById('member-search').addEventListener('blur', () => {
+    closeMemberPickerList();
+  });
 
   // Delegated clicks on the teams grid
   document.getElementById('teams-grid').addEventListener('click', (e) => {
@@ -358,6 +394,13 @@ async function openMemberModal() {
   form.reset();
   form.classList.remove('was-validated');
 
+  // Reset picker state
+  selectedProfileId = null;
+  document.getElementById('member-profile').value = '';
+  document.getElementById('member-search').value = '';
+  document.getElementById('member-profile-error').classList.add('d-none');
+  closeMemberPickerList();
+
   // Fetch profiles not already in this team (bypasses RLS via SECURITY DEFINER)
   const { data: available, error } = await supabase
     .rpc('get_available_profiles_for_team', { target_team_id: currentTeamId });
@@ -368,22 +411,56 @@ async function openMemberModal() {
     return;
   }
 
-  const select = document.getElementById('member-profile');
-  select.innerHTML = '<option value="">— Select a person —</option>';
-  available.forEach((p) => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.role === 'admin' ? `${p.full_name} (admin)` : p.full_name;
-    select.appendChild(opt);
-  });
+  availableProfiles = available || [];
+  renderMemberPickerList(availableProfiles);
 
   memberModalInstance.show();
 }
 
+function renderMemberPickerList(profiles) {
+  const list = document.getElementById('member-picker-list');
+
+  if (profiles.length === 0) {
+    list.innerHTML = '<div class="member-picker-empty">No people found</div>';
+    return;
+  }
+
+  list.innerHTML = profiles.map((p) => {
+    const appBadge = p.role === 'admin'
+      ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>'
+      : '';
+    const teamBadges = (p.other_teams || [])
+      .map((t) => `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">${escapeHtml(t)}</span>`)
+      .join('');
+
+    return `
+      <div class="member-picker-item" data-id="${p.id}" data-name="${escapeHtml(p.full_name)}">
+        <div class="d-flex align-items-center gap-2">
+          <span class="item-name">${escapeHtml(p.full_name)}</span>
+          ${appBadge}
+        </div>
+        ${teamBadges ? `<div class="item-teams">${teamBadges}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function openMemberPickerList() {
+  document.getElementById('member-picker-list').classList.remove('d-none');
+  document.getElementById('member-search').classList.add('picker-open');
+}
+
+function closeMemberPickerList() {
+  document.getElementById('member-picker-list').classList.add('d-none');
+  document.getElementById('member-search').classList.remove('picker-open');
+}
+
 async function handleMemberSave() {
-  const form = document.getElementById('member-form');
-  form.classList.add('was-validated');
-  if (!form.checkValidity()) return;
+  // Validate picker selection manually (hidden input can't use native required)
+  if (!document.getElementById('member-profile').value) {
+    document.getElementById('member-profile-error').classList.remove('d-none');
+    return;
+  }
 
   const saveBtn = document.getElementById('member-save-btn');
   const spinner = document.getElementById('member-save-spinner');

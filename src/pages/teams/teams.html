@@ -131,11 +131,17 @@
         <div class="modal-body pt-2">
           <form id="member-form" novalidate>
             <div class="mb-3">
-              <label for="member-profile" class="form-label fw-medium">Person</label>
-              <select class="form-select" id="member-profile" required>
-                <option value="">— Select a person —</option>
-              </select>
-              <div class="invalid-feedback">Please select a person.</div>
+              <label class="form-label fw-medium">Person</label>
+              <input
+                type="text"
+                class="form-control"
+                id="member-search"
+                placeholder="Search people…"
+                autocomplete="off"
+              />
+              <div class="member-picker-list border border-top-0 rounded-bottom d-none" id="member-picker-list"></div>
+              <input type="hidden" id="member-profile" />
+              <div class="text-danger small mt-1 d-none" id="member-profile-error">Please select a person.</div>
             </div>
             <div class="mb-3">
               <label for="member-role" class="form-label fw-medium">Team Role</label>

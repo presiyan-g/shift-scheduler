@@ -1,5 +1,52 @@
 /* Teams page styles */
 
+/* ── Member searchable picker ─────────────────────────────────────────────── */
+
+.member-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.member-picker-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.member-picker-item:last-child {
+  border-bottom: none;
+}
+
+.member-picker-item:hover {
+  background: #f0f4ff;
+}
+
+.member-picker-item .item-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.member-picker-item .item-teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.member-picker-empty {
+  padding: 0.6rem 0.75rem;
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+/* Flush the bottom corners of the search input when list is open */
+#member-search.picker-open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+
 .team-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
