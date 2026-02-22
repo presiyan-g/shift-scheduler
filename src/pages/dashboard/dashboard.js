@@ -4,6 +4,7 @@ import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
 import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/transfers.js';
+import { completeExpiredShifts } from '@shared/shifts.js';
 
 let currentUser = null;
 let transferModalInstance = null;
@@ -15,6 +16,7 @@ async function init() {
   currentUser = user;
 
   renderNavbar({ activePage: 'dashboard' });
+  await completeExpiredShifts();
 
   // 1. Fetch profile to get full_name and role
   const { data: profile, error: profileError } = await supabase

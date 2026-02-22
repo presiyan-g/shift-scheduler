@@ -4,6 +4,7 @@ import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getAllTeams, getManagedTeams, getTeamEmployees } from '@shared/teams.js';
 import { createTransferRequest, getTransferTargets } from '@shared/transfers.js';
+import { completeExpiredShifts } from '@shared/shifts.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ async function init() {
   currentUser = await requireAuth();
 
   renderNavbar({ activePage: 'schedule' });
+  await completeExpiredShifts();
 
   // Fetch profile to determine role
   const { data: profile, error: profileError } = await supabase
