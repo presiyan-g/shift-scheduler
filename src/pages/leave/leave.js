@@ -1,4 +1,4 @@
-import { requireAuth } from '@shared/auth.js';
+import { requireAuth, getProfile } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
@@ -33,14 +33,8 @@ async function init() {
 
   renderNavbar({ activePage: 'leave' });
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('full_name, role, avatar_url')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (profileError) {
-    console.error('Profile fetch error:', profileError);
+  const profile = await getProfile(currentUser.id);
+  if (!profile) {
     showToast('Could not load your profile.', 'danger');
     return;
   }

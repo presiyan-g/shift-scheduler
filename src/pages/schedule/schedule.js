@@ -1,4 +1,4 @@
-import { requireAuth } from '@shared/auth.js';
+import { requireAuth, getProfile } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
@@ -38,14 +38,8 @@ async function init() {
   await completeExpiredShifts();
 
   // Fetch profile to determine role
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('full_name, role, avatar_url')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (profileError) {
-    console.error('Profile fetch error:', profileError);
+  const profile = await getProfile(currentUser.id);
+  if (!profile) {
     showToast('Could not load your profile.', 'danger');
     return;
   }
@@ -253,9 +247,9 @@ function attachEventListeners() {
   });
 
   // Leave conflict check: re-run when employee, date, or status changes in the shift modal
-  document.getElementById('shift-employee').addEventListener('change', updateLeaveConflictWarning);
-  document.getElementById('shift-date').addEventListener('change', updateLeaveConflictWarning);
-  document.getElementById('shift-status').addEventListener('change', updateLeaveConflictWarning);
+  document.getElementById('shift-employee').addEventListener('change', debouncedLeaveConflictWarning);
+  document.getElementById('shift-date').addEventListener('change', debouncedLeaveConflictWarning);
+  document.getElementById('shift-status').addEventListener('change', debouncedLeaveConflictWarning);
 
   // Employee calendar: click shift pill for transfer, or click day cell to navigate
   document.getElementById('month-calendar-grid').addEventListener('click', (e) => {
@@ -812,6 +806,18 @@ function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
 
   container.innerHTML = html;
 }
+
+// ── Debounce helper ──────────────────────────────────────────────────────────
+
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+const debouncedLeaveConflictWarning = debounce(updateLeaveConflictWarning, 350);
 
 // ── Leave conflict check (shift modal) ──────────────────────────────────────
 

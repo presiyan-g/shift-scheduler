@@ -1,4 +1,4 @@
-import { requireAuth } from '@shared/auth.js';
+import { requireAuth, getProfile } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
@@ -10,12 +10,7 @@ async function init() {
   renderNavbar({ activePage: 'account' });
 
   // Fetch profile for navbar
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, role, avatar_url')
-    .eq('id', user.id)
-    .single();
-
+  const profile = await getProfile(user.id);
   const managedTeams = await getManagedTeams(user.id);
   const isTeamManager = managedTeams.length > 0;
 

@@ -1,11 +1,20 @@
 import { supabase } from '@shared/supabase.js';
 
+const MT_CACHE_PREFIX = 'ss_mt_';
+
 /**
  * Fetch teams where the given user is a manager.
+ * Result is cached in sessionStorage for the duration of the session.
  * @param {string} userId
  * @returns {Promise<Array<{team_id: string, role: string, team: {id: string, name: string, description: string}}>>}
  */
 export async function getManagedTeams(userId) {
+  const cacheKey = `${MT_CACHE_PREFIX}${userId}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch {}
+  }
+
   const { data, error } = await supabase
     .from('team_members')
     .select('team_id, role, team:teams(id, name, description)')
@@ -16,7 +25,10 @@ export async function getManagedTeams(userId) {
     console.error('getManagedTeams error:', error);
     return [];
   }
-  return data || [];
+
+  const result = data || [];
+  sessionStorage.setItem(cacheKey, JSON.stringify(result));
+  return result;
 }
 
 /**

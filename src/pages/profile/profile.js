@@ -1,4 +1,4 @@
-import { requireAuth } from '@shared/auth.js';
+import { requireAuth, clearSessionCache } from '@shared/auth.js';
 import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
@@ -141,6 +141,7 @@ async function handleNameSave(userId) {
     return;
   }
 
+  clearSessionCache();
   document.getElementById('profile-name-display').textContent = newName;
   form.classList.remove('was-validated');
   showToast('Name updated successfully.', 'success');
@@ -207,6 +208,7 @@ async function handleAvatarUpload(user, fileInput) {
   }
 
   // Re-render avatar with new URL
+  clearSessionCache();
   const currentName = document.getElementById('full-name-input').value;
   renderAvatarLarge(avatarUrl, currentName);
   showToast('Profile photo updated.', 'success');

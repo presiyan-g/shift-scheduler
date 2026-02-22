@@ -1,4 +1,5 @@
 import { supabase } from '@shared/supabase.js';
+import { clearSessionCache } from '@shared/auth.js';
 
 /**
  * Renders the shared navbar into a container element.
@@ -107,6 +108,7 @@ export function renderNavbar({
 
   // Logout handler
   document.getElementById('logout-btn').addEventListener('click', async () => {
+    clearSessionCache();
     await supabase.auth.signOut();
     window.location.replace('/login');
   });
