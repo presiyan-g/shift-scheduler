@@ -22,10 +22,16 @@
         <h1 class="fw-bold fs-3 mb-0">
           <i class="bi bi-calendar3 me-2 text-primary"></i>Team Schedule
         </h1>
-        <p class="text-muted mb-0 small" id="schedule-subtitle">Loading...</p>
+        <div class="d-flex align-items-center gap-3 mt-1">
+          <p class="text-muted mb-0 small" id="schedule-subtitle">Loading...</p>
+          <!-- Manager/Admin: team filter dropdown -->
+          <select class="form-select form-select-sm d-none" id="team-filter" style="max-width: 220px;">
+            <option value="">All My Teams</option>
+          </select>
+        </div>
       </div>
       <!-- Page header controls -->
-      <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
 
         <!-- "My Shifts Only" toggle — visible to all users -->
         <div class="form-check form-switch mb-0 d-flex align-items-center gap-1">
@@ -39,11 +45,6 @@
             My shifts only
           </label>
         </div>
-
-        <!-- Manager/Admin: team filter dropdown -->
-        <select class="form-select form-select-sm d-none" id="team-filter" style="max-width: 220px;">
-          <option value="">All My Teams</option>
-        </select>
 
         <!-- Manager/Admin: add shift button -->
         <button class="btn btn-primary btn-sm d-none d-inline-flex align-items-center gap-1" id="add-shift-btn" type="button">
