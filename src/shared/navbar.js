@@ -9,7 +9,7 @@ import { clearSessionCache } from '@shared/auth.js';
  * @param {string} [options.activePage] - Current page key to highlight in nav (e.g. 'dashboard', 'schedule')
  * @param {string} [options.role] - User role ('admin' | 'employee') — controls which links are shown
  * @param {boolean} [options.isTeamManager] - Whether the user manages at least one team
- * @param {string} [options.userName] - Display name for the avatar dropdown
+ * @param {string} [options.userName] - Display name for the avatar menu
  * @param {string|null} [options.avatarUrl] - URL to the user's avatar image
  */
 export function renderNavbar({
@@ -49,6 +49,42 @@ export function renderNavbar({
 
   const avatarHtml = buildAvatarHtml(userName, avatarUrl);
   const displayName = escapeHtml(userName) || 'Account';
+  const mobileUserMenuHtml = `
+    <li class="nav-item d-lg-none user-inline-item">
+      <button
+        class="nav-link w-100 text-start border-0 bg-transparent d-flex align-items-center gap-2"
+        type="button"
+        id="mobile-user-menu-btn"
+        data-bs-toggle="collapse"
+        data-bs-target="#mobile-user-menu"
+        aria-expanded="false"
+        aria-controls="mobile-user-menu"
+      >
+        <span class="navbar-avatar-bubble">${avatarHtml}</span>
+        <span class="fw-medium">${displayName}</span>
+        <i class="bi bi-chevron-down small ms-auto"></i>
+      </button>
+      <div class="collapse" id="mobile-user-menu">
+        <ul class="navbar-nav mobile-user-submenu ps-2 pb-2">
+          <li class="nav-item">
+            <a class="nav-link" href="/profile">
+              <i class="bi bi-person-circle me-2"></i>Profile
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/account">
+              <i class="bi bi-gear me-2"></i>Account
+            </a>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link text-danger border-0 bg-transparent text-start w-100" type="button" id="logout-btn-mobile">
+              <i class="bi bi-box-arrow-right me-2"></i>Log Out
+            </button>
+          </li>
+        </ul>
+      </div>
+    </li>
+  `;
 
   const nav = document.createElement('nav');
   nav.id = 'main-navbar';
@@ -66,8 +102,9 @@ export function renderNavbar({
       <div class="collapse navbar-collapse" id="main-nav">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           ${linksHtml}
+          ${mobileUserMenuHtml}
         </ul>
-        <div class="dropdown">
+        <div class="dropdown user-menu-dropdown d-none d-lg-block">
           <button
             class="btn btn-link p-0 d-flex align-items-center gap-2 text-white text-decoration-none"
             type="button"
@@ -81,7 +118,7 @@ export function renderNavbar({
             <span class="d-none d-md-inline fw-medium small">${displayName}</span>
             <i class="bi bi-chevron-down small"></i>
           </button>
-          <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" aria-labelledby="user-menu-btn">
+          <ul class="dropdown-menu dropdown-menu-lg-end shadow-sm border-0" aria-labelledby="user-menu-btn">
             <li>
               <a class="dropdown-item" href="/profile">
                 <i class="bi bi-person-circle me-2"></i>Profile
@@ -94,7 +131,7 @@ export function renderNavbar({
             </li>
             <li><hr class="dropdown-divider" /></li>
             <li>
-              <button class="dropdown-item text-danger" type="button" id="logout-btn">
+              <button class="dropdown-item text-danger" type="button" id="logout-btn-desktop">
                 <i class="bi bi-box-arrow-right me-2"></i>Log Out
               </button>
             </li>
@@ -106,12 +143,14 @@ export function renderNavbar({
 
   document.body.prepend(nav);
 
-  // Logout handler
-  document.getElementById('logout-btn').addEventListener('click', async () => {
+  const handleLogout = async () => {
     clearSessionCache();
     await supabase.auth.signOut();
     window.location.replace('/login');
-  });
+  };
+
+  document.getElementById('logout-btn-desktop')?.addEventListener('click', handleLogout);
+  document.getElementById('logout-btn-mobile')?.addEventListener('click', handleLogout);
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────

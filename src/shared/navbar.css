@@ -40,3 +40,25 @@
 #user-menu-btn::after {
   display: none;
 }
+
+@media (max-width: 991.98px) {
+  #main-navbar .user-inline-item {
+    margin-top: 0.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    padding-top: 0.5rem;
+  }
+
+  #mobile-user-menu-btn .bi-chevron-down {
+    transition: transform 0.2s ease;
+  }
+
+  #mobile-user-menu-btn[aria-expanded='true'] .bi-chevron-down {
+    transform: rotate(180deg);
+  }
+
+  #main-navbar .mobile-user-submenu .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+}
