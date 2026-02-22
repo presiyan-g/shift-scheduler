@@ -262,7 +262,11 @@ function attachEventListeners() {
     const shiftPill = e.target.closest('.month-cal-shift-clickable');
     if (shiftPill && shiftPill.dataset.shiftId) {
       e.stopPropagation();
-      openTransferModal(shiftPill.dataset.shiftId, shiftPill.dataset.teamId);
+      if (isManager) {
+        openShiftModal(shiftPill.dataset.shiftId);
+      } else {
+        openTransferModal(shiftPill.dataset.shiftId, shiftPill.dataset.teamId);
+      }
       return;
     }
     const cell = e.target.closest('.month-cal-cell');
@@ -323,8 +327,8 @@ function switchView(view) {
   document.getElementById('month-nav').classList.toggle('d-none', view !== 'month');
 
   document.getElementById('week-grid').classList.toggle('d-none', view !== 'week');
-  document.getElementById('month-calendar-grid').classList.add('d-none');
-  document.getElementById('month-matrix-container').classList.toggle('d-none', view !== 'month');
+  document.getElementById('month-calendar-grid').classList.toggle('d-none', view !== 'month' || !myShiftsOnly);
+  document.getElementById('month-matrix-container').classList.toggle('d-none', view !== 'month' || myShiftsOnly);
 
   updateSubtitle();
   if (view === 'week') {
@@ -343,8 +347,9 @@ async function loadMonth() {
   const loading = document.getElementById('schedule-loading');
   const calGrid = document.getElementById('month-calendar-grid');
   const matrixContainer = document.getElementById('month-matrix-container');
-  const activeGrid = matrixContainer;
-  const inactiveGrid = calGrid;
+  const showCalendar = myShiftsOnly;
+  const activeGrid = showCalendar ? calGrid : matrixContainer;
+  const inactiveGrid = showCalendar ? matrixContainer : calGrid;
 
   loading.classList.remove('d-none');
   activeGrid.classList.add('d-none');
@@ -396,7 +401,11 @@ async function loadMonth() {
   if (myShiftsOnly) leaveMonthQuery = leaveMonthQuery.eq('employee_id', currentUser.id);
   const { data: monthLeaves } = await leaveMonthQuery;
 
-  renderMonthMatrix(currentShifts, monthEmployees, monthLeaves || []);
+  if (showCalendar) {
+    renderMyMonthCalendar(currentShifts, monthLeaves || []);
+  } else {
+    renderMonthMatrix(currentShifts, monthEmployees, monthLeaves || []);
+  }
 
   loading.classList.add('d-none');
   activeGrid.classList.remove('d-none');
@@ -803,6 +812,122 @@ function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
     html += '</tr>';
   });
   html += '</tbody></table></div>';
+
+  container.innerHTML = html;
+}
+
+function renderMyMonthCalendar(shifts, leaves = []) {
+  const container = document.getElementById('month-calendar-grid');
+  container.innerHTML = '';
+
+  const todayStr = toDateString(new Date());
+  const monthStart = getMonthStart(currentMonthDate);
+  const monthYear = monthStart.getFullYear();
+  const monthNum = monthStart.getMonth();
+  const firstDayOffset = monthStart.getDay(); // 0=Sun
+
+  const gridStart = new Date(monthYear, monthNum, 1 - firstDayOffset);
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+
+  const shiftMap = {};
+  (shifts || []).forEach((shift) => {
+    if (!shift?.shift_date) return;
+    if (!shiftMap[shift.shift_date]) shiftMap[shift.shift_date] = [];
+    shiftMap[shift.shift_date].push(shift);
+  });
+
+  const leaveMap = {};
+  (leaves || []).forEach((leave) => {
+    let cur = new Date(`${leave.start_date}T00:00:00`);
+    const end = new Date(`${leave.end_date}T00:00:00`);
+    while (cur <= end) {
+      const key = toDateString(cur);
+      if (!leaveMap[key]) leaveMap[key] = [];
+      leaveMap[key].push(leave);
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  let html = '<div class="month-calendar">';
+  html += '<div class="month-cal-header">';
+  weekDayHeaders.forEach((label) => {
+    html += `<div class="month-cal-header-cell">${label}</div>`;
+  });
+  html += '</div>';
+
+  html += '<div class="month-cal-body">';
+  days.forEach((dateObj) => {
+    const dateStr = toDateString(dateObj);
+    const inCurrentMonth = dateObj.getMonth() === monthNum;
+    const isToday = dateStr === todayStr;
+    const dayShifts = shiftMap[dateStr] || [];
+    const dayLeaves = leaveMap[dateStr] || [];
+
+    const cellClasses = [
+      'month-cal-cell',
+      inCurrentMonth ? '' : 'month-cal-outside',
+      isToday ? 'month-cal-today' : '',
+    ].filter(Boolean).join(' ');
+
+    let entriesHtml = '';
+    dayShifts.slice(0, 3).forEach((shift) => {
+      const isEligibleForTransfer =
+        !isManager &&
+        shift.employee_id === currentUser.id &&
+        shift.status === 'scheduled' &&
+        shift.shift_date >= todayStr &&
+        shift.team_id &&
+        !pendingTransferShiftIds.has(shift.id);
+
+      const isClickable = isManager || isEligibleForTransfer;
+      const statusTone = {
+        scheduled: 'primary',
+        completed: 'success',
+        cancelled: 'danger',
+      }[shift.status] || 'secondary';
+
+      const transferHint = !isManager && pendingTransferShiftIds.has(shift.id)
+        ? '<i class="bi bi-hourglass-split"></i>'
+        : '';
+
+      entriesHtml += `
+        <div
+          class="month-cal-shift bg-${statusTone}-subtle text-${statusTone}${isClickable ? ' month-cal-shift-clickable' : ''}"
+          data-shift-id="${shift.id}"
+          data-team-id="${shift.team_id || ''}"
+          title="${escapeHtml(shift.title || 'Shift')}: ${formatTime(shift.start_time)}–${formatTime(shift.end_time)}"
+        >
+          <span class="month-cal-shift-time">${formatTimeShort(shift.start_time)}-${formatTimeShort(shift.end_time)}</span>
+          <span class="month-cal-shift-title">${escapeHtml(shift.title || 'Shift')}</span>
+          ${transferHint}
+        </div>
+      `;
+    });
+
+    if (dayShifts.length > 3) {
+      entriesHtml += `<div class="month-cal-more text-muted">+${dayShifts.length - 3} more</div>`;
+    }
+
+    if (dayLeaves.length > 0) {
+      const hasApproved = dayLeaves.some((leave) => leave.status === 'approved');
+      const leaveLabel = hasApproved ? 'Leave' : 'Leave pending';
+      entriesHtml += `<div class="month-cal-more ${hasApproved ? 'text-warning-emphasis' : 'text-muted'}"><i class="bi bi-airplane"></i> ${leaveLabel}</div>`;
+    }
+
+    html += `
+      <div class="${cellClasses}" data-date="${dateStr}">
+        <div class="month-cal-day-number ${isToday ? 'fw-bold text-primary' : ''}">${dateObj.getDate()}</div>
+        ${entriesHtml}
+      </div>
+    `;
+  });
+  html += '</div></div>';
 
   container.innerHTML = html;
 }
