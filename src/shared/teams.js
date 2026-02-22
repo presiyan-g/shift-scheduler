@@ -64,8 +64,7 @@ export async function getTeamEmployees(teamId) {
   const { data, error } = await supabase
     .from('team_members')
     .select('profile:profiles(id, full_name)')
-    .eq('team_id', teamId)
-    .eq('role', 'member');
+    .eq('team_id', teamId);
 
   if (error) {
     console.error('getTeamEmployees error:', error);
