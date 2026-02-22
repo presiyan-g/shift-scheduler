@@ -27,8 +27,7 @@ export function renderNavbar({
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'bi-speedometer2' },
     { key: 'schedule', label: 'Schedule', href: '/schedule', icon: 'bi-calendar3' },
     { key: 'transfers', label: 'Transfers', href: '/transfers', icon: 'bi-arrow-left-right' },
-    // Future pages — uncomment as they are built:
-    // { key: 'leave', label: 'Leave', href: '/leave', icon: 'bi-airplane' },
+    { key: 'leave', label: 'Leave', href: '/leave', icon: 'bi-airplane' },
   ];
 
   // Teams link visible to admins and team managers

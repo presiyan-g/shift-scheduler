@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <title>Leave Requests — ShiftScheduler</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <link rel="stylesheet" href="/src/shared/navbar.css" />
+  <link rel="stylesheet" href="/src/pages/leave/leave.css" />
+</head>
+<body class="bg-light">
+
+  <!-- Navbar rendered by shared/navbar.js -->
+
+  <main class="container py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+      <div>
+        <h1 class="fw-bold fs-3 mb-0">
+          <i class="bi bi-airplane me-2 text-primary"></i>Leave Requests
+        </h1>
+        <p class="text-muted small mb-0">Submit and manage time-off requests</p>
+      </div>
+      <button class="btn btn-primary" id="request-leave-btn">
+        <i class="bi bi-plus-circle me-1"></i>Request Leave
+      </button>
+    </div>
+
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs mb-3" id="leave-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="my-requests-tab" data-bs-toggle="tab"
+                data-bs-target="#my-requests" type="button" role="tab">
+          <i class="bi bi-person-lines-fill me-1"></i>My Requests
+          <span class="badge bg-secondary rounded-pill ms-1 d-none" id="my-requests-badge">0</span>
+        </button>
+      </li>
+      <li class="nav-item d-none" id="manager-queue-tab-item" role="presentation">
+        <button class="nav-link" id="manager-queue-tab" data-bs-toggle="tab"
+                data-bs-target="#manager-queue" type="button" role="tab">
+          <i class="bi bi-clipboard-check me-1"></i>Manager Queue
+          <span class="badge bg-warning text-dark rounded-pill ms-1 d-none" id="manager-queue-badge">0</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="leave-tab-content">
+      <!-- My Requests tab -->
+      <div class="tab-pane fade show active" id="my-requests" role="tabpanel">
+        <div id="my-requests-list"></div>
+      </div>
+
+      <!-- Manager Queue tab -->
+      <div class="tab-pane fade" id="manager-queue" role="tabpanel">
+        <div id="manager-queue-list"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Submit Leave Modal (employee) ── -->
+  <div class="modal fade" id="submit-modal" tabindex="-1" aria-labelledby="submit-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="submit-modal-label">
+            <i class="bi bi-airplane me-2 text-primary"></i>Request Leave
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="leave-form" novalidate>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label for="leave-start-date" class="form-label fw-medium">Start Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="leave-start-date" required />
+                <div class="invalid-feedback">Please select a start date.</div>
+              </div>
+              <div class="col-6">
+                <label for="leave-end-date" class="form-label fw-medium">End Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="leave-end-date" required />
+                <div class="invalid-feedback">End date must be on or after start date.</div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="leave-type" class="form-label fw-medium">Type <span class="text-danger">*</span></label>
+              <select class="form-select" id="leave-type" required>
+                <option value="" disabled selected>Select leave type...</option>
+                <option value="sick">Sick Leave</option>
+                <option value="vacation">Vacation</option>
+                <option value="personal">Personal</option>
+                <option value="other">Other</option>
+              </select>
+              <div class="invalid-feedback">Please select a leave type.</div>
+            </div>
+            <div class="mb-1">
+              <label for="leave-note" class="form-label fw-medium">
+                Note <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <textarea class="form-control" id="leave-note" rows="3" maxlength="500"
+                        placeholder="Add any details or reason..."></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer border-0 pt-0 gap-2">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="submit-confirm-btn">
+            <i class="bi bi-send me-1"></i>Submit Request
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="submit-spinner"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Review Modal (manager) ── -->
+  <div class="modal fade" id="review-modal" tabindex="-1" aria-labelledby="review-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="review-modal-label">
+            <i class="bi bi-clipboard-check me-2 text-primary"></i>Review Leave Request
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Employee + request summary -->
+          <div class="alert alert-light border mb-3 py-2 px-3" id="review-request-summary">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Conflicting shifts section -->
+          <div id="review-conflicts-section">
+            <h6 class="fw-semibold mb-2">
+              <i class="bi bi-exclamation-triangle me-1 text-warning"></i>Affected Shifts
+            </h6>
+
+            <!-- Warning: pending transfers exist -->
+            <div class="alert alert-warning d-none py-2 mb-2" id="review-transfer-warning">
+              <i class="bi bi-arrow-left-right me-1"></i>
+              <strong>Note:</strong> Some shifts have pending transfer requests — those will be automatically cancelled if you approve.
+            </div>
+
+            <!-- Conflicts list (populated by JS) -->
+            <div id="review-conflicts-list">
+              <div class="text-center py-3 text-muted" id="conflicts-loading">
+                <span class="spinner-border spinner-border-sm me-2"></span>Loading affected shifts...
+              </div>
+            </div>
+          </div>
+
+          <!-- Manager note -->
+          <div class="mb-1 mt-3">
+            <label for="review-note" class="form-label fw-medium">
+              Note <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            <textarea class="form-control" id="review-note" rows="2" maxlength="500"
+                      placeholder="Add a note for the employee..."></textarea>
+          </div>
+
+          <input type="hidden" id="review-request-id" />
+        </div>
+        <div class="modal-footer border-0 pt-0 gap-2">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Back</button>
+          <button type="button" class="btn btn-outline-danger" id="review-reject-btn">
+            <i class="bi bi-x-circle me-1"></i>Reject
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="reject-spinner"></span>
+          </button>
+          <button type="button" class="btn btn-success" id="review-approve-btn">
+            <i class="bi bi-check-circle me-1"></i>Approve
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="approve-spinner"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Cancel Approved Leave Modal (manager/admin) ── -->
+  <div class="modal fade" id="cancel-approved-modal" tabindex="-1" aria-labelledby="cancel-approved-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="cancel-approved-modal-label">
+            <i class="bi bi-x-circle me-2 text-warning"></i>Cancel Approved Leave
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning py-2 mb-3" id="cancel-approved-summary"></div>
+          <div class="mb-1">
+            <label for="cancel-approved-note" class="form-label fw-medium">
+              Note <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            <textarea class="form-control" id="cancel-approved-note" rows="2" maxlength="500"
+              placeholder="Reason for cancellation..."></textarea>
+          </div>
+          <input type="hidden" id="cancel-approved-id" />
+        </div>
+        <div class="modal-footer border-0 pt-0 gap-2">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Back</button>
+          <button type="button" class="btn btn-warning" id="cancel-approved-confirm-btn">
+            <i class="bi bi-x-circle me-1"></i>Cancel Leave
+            <span class="spinner-border spinner-border-sm ms-2 d-none" id="cancel-approved-spinner"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/src/pages/leave/leave.js"></script>
+</body>
+</html>

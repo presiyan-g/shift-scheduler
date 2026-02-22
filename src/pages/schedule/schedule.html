@@ -123,6 +123,12 @@
             <!-- Hidden shift ID for edit mode -->
             <input type="hidden" id="shift-id" />
 
+            <!-- Leave conflict warning -->
+            <div class="alert alert-warning d-none py-2 mb-2" id="leave-conflict-warning">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              <span class="leave-conflict-text"></span>
+            </div>
+
             <!-- Team dropdown (hidden for employees, shown for managers) -->
             <div class="mb-3 d-none" id="team-field">
               <label for="shift-team" class="form-label fw-medium">Team</label>

@@ -10,6 +10,7 @@ import { completeExpiredShifts } from '@shared/shifts.js';
 
 let currentWeekStart = null; // Date object — Monday of the displayed week
 let currentUser = null;
+let currentUserFullName = 'You';
 let userRole = 'employee';
 let isManager = false;
 let isAdmin = false;
@@ -50,6 +51,7 @@ async function init() {
   }
 
   userRole = profile.role;
+  currentUserFullName = profile.full_name || 'You';
   isAdmin = userRole === 'admin';
 
   // Fetch managed teams early to determine manager status
@@ -247,7 +249,13 @@ function attachEventListeners() {
       select.innerHTML = '<option value="">— Select employee —</option>';
       employees = [];
     }
+    await updateLeaveConflictWarning();
   });
+
+  // Leave conflict check: re-run when employee, date, or status changes in the shift modal
+  document.getElementById('shift-employee').addEventListener('change', updateLeaveConflictWarning);
+  document.getElementById('shift-date').addEventListener('change', updateLeaveConflictWarning);
+  document.getElementById('shift-status').addEventListener('change', updateLeaveConflictWarning);
 
   // Employee calendar: click shift pill for transfer, or click day cell to navigate
   document.getElementById('month-calendar-grid').addEventListener('click', (e) => {
@@ -354,6 +362,7 @@ async function loadMonth() {
   const monthEnd = getMonthEnd(currentMonthDate);
   const startStr = toDateString(monthStart);
   const endStr = toDateString(monthEnd);
+  const monthEmployees = await getMonthViewEmployees();
 
   let query = supabase
     .from('shifts')
@@ -383,10 +392,69 @@ async function loadMonth() {
 
   currentShifts = shifts || [];
 
-  renderMonthMatrix(currentShifts);
+  // Co-fetch leave requests for the month period
+  let leaveMonthQuery = supabase
+    .from('leave_requests')
+    .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
+    .in('status', ['approved', 'pending'])
+    .lte('start_date', endStr)
+    .gte('end_date', startStr);
+  if (myShiftsOnly) leaveMonthQuery = leaveMonthQuery.eq('employee_id', currentUser.id);
+  const { data: monthLeaves } = await leaveMonthQuery;
+
+  renderMonthMatrix(currentShifts, monthEmployees, monthLeaves || []);
 
   loading.classList.add('d-none');
   activeGrid.classList.remove('d-none');
+}
+
+async function getMonthViewEmployees() {
+  if (myShiftsOnly) {
+    return [{ id: currentUser.id, full_name: currentUserFullName }];
+  }
+
+  if (selectedTeamId) {
+    return getTeamEmployees(selectedTeamId);
+  }
+
+  if (isManager) {
+    const teamIds = managedTeams
+      .map((mt) => mt?.team?.id)
+      .filter(Boolean);
+
+    if (teamIds.length === 0) {
+      return [];
+    }
+
+    const teamEmployees = await Promise.all(teamIds.map((teamId) => getTeamEmployees(teamId)));
+    return dedupeEmployees(teamEmployees.flat());
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .order('full_name');
+
+  if (error) {
+    console.error('Month employee roster fetch error:', error);
+    return [];
+  }
+
+  return dedupeEmployees(data || []);
+}
+
+function dedupeEmployees(list) {
+  const map = new Map();
+  (list || []).forEach((employee) => {
+    if (!employee?.id) return;
+    if (!map.has(employee.id)) {
+      map.set(employee.id, {
+        id: employee.id,
+        full_name: employee.full_name || 'Unknown',
+      });
+    }
+  });
+  return Array.from(map.values());
 }
 
 async function loadWeek() {
@@ -432,7 +500,18 @@ async function loadWeek() {
   }
 
   currentShifts = shifts || [];
-  renderWeekGrid(currentShifts);
+
+  // Co-fetch leave requests for the week period
+  let leaveWeekQuery = supabase
+    .from('leave_requests')
+    .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
+    .in('status', ['approved', 'pending'])
+    .lte('start_date', weekEndStr)
+    .gte('end_date', weekStartStr);
+  if (myShiftsOnly) leaveWeekQuery = leaveWeekQuery.eq('employee_id', currentUser.id);
+  const { data: weekLeaves } = await leaveWeekQuery;
+
+  renderWeekGrid(currentShifts, weekLeaves || []);
 
   loading.classList.add('d-none');
   grid.classList.remove('d-none');
@@ -454,12 +533,25 @@ async function fetchEmployeesForTeam(teamId) {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
-function renderWeekGrid(shifts) {
+function renderWeekGrid(shifts, leaves = []) {
   const grid = document.getElementById('week-grid');
   grid.innerHTML = '';
 
   const today = toDateString(new Date());
   const days = getWeekDays(currentWeekStart);
+
+  // Build leaveMap[dateStr] = [leave, ...] for days in this week
+  const leaveMap = {};
+  days.forEach((d) => { leaveMap[toDateString(d)] = []; });
+  leaves.forEach((lr) => {
+    let cur = new Date(lr.start_date + 'T00:00:00');
+    const end = new Date(lr.end_date + 'T00:00:00');
+    while (cur <= end) {
+      const ds = toDateString(cur);
+      if (leaveMap[ds]) leaveMap[ds].push(lr);
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
 
   days.forEach((dayDate) => {
     const dateStr = toDateString(dayDate);
@@ -468,12 +560,12 @@ function renderWeekGrid(shifts) {
 
     const col = document.createElement('div');
     col.className = 'col-12 col-sm-6 col-md-4 col-lg schedule-day-col';
-    col.innerHTML = buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts);
+    col.innerHTML = buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts, leaveMap[dateStr] || []);
     grid.appendChild(col);
   });
 }
 
-function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts) {
+function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts, dayLeaves = []) {
   const weekday = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
   const monthDay = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -483,6 +575,18 @@ function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts) {
   const todayBadge = isToday
     ? `<span class="badge bg-primary ms-auto">Today</span>`
     : '';
+
+  const typeLabels = { sick: 'Sick', vacation: 'Vacation', personal: 'Personal', other: 'Leave' };
+  const leaveBannersHtml = dayLeaves.map((lr) => {
+    const isOwn = lr.employee_id === currentUser.id;
+    const name = isOwn ? 'You' : escapeHtml(lr.employee?.full_name || '—');
+    const typeLabel = typeLabels[lr.leave_type] || 'Leave';
+    const isPending = lr.status === 'pending';
+    const cls = isPending ? 'leave-banner-pending' : 'leave-banner-approved';
+    return `<div class="leave-day-banner ${cls}">
+      <i class="bi bi-airplane me-1"></i>${name} — ${typeLabel}${isPending ? ' <em class="text-muted">(pending)</em>' : ''}
+    </div>`;
+  }).join('');
 
   const shiftsHtml =
     dayShifts.length === 0
@@ -499,6 +603,7 @@ function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts) {
         ${todayBadge}
       </div>
       <div class="card-body p-2 d-flex flex-column gap-2">
+        ${leaveBannersHtml}
         ${shiftsHtml}
       </div>
     </div>
@@ -578,7 +683,7 @@ function buildShiftCardHtml(shift) {
 
 // ── Monthly renderer ─────────────────────────────────────────────────────────
 
-function renderMonthMatrix(shifts) {
+function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
   const container = document.getElementById('month-matrix-container');
   container.innerHTML = '';
 
@@ -590,6 +695,14 @@ function renderMonthMatrix(shifts) {
   // Group shifts by employee_id -> date -> [shifts]
   const shiftMap = {};
   const employeeMap = {};
+
+  (rosterEmployees || []).forEach((employee) => {
+    if (!employee?.id) return;
+    employeeMap[employee.id] = {
+      id: employee.id,
+      full_name: employee.full_name || 'Unknown',
+    };
+  });
 
   shifts.forEach((s) => {
     const empId = s.employee_id;
@@ -605,19 +718,23 @@ function renderMonthMatrix(shifts) {
     }
   });
 
+  // Build leaveMap[empId][dateStr] = [leave, ...]
+  const leaveMap = {};
+  leaves.forEach((lr) => {
+    if (!leaveMap[lr.employee_id]) leaveMap[lr.employee_id] = {};
+    let cur = new Date(lr.start_date + 'T00:00:00');
+    const endD = new Date(lr.end_date + 'T00:00:00');
+    while (cur <= endD) {
+      const ds = toDateString(cur);
+      if (!leaveMap[lr.employee_id][ds]) leaveMap[lr.employee_id][ds] = [];
+      leaveMap[lr.employee_id][ds].push(lr);
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
   const sortedEmployees = Object.values(employeeMap).sort((a, b) =>
     a.full_name.localeCompare(b.full_name)
   );
-
-  if (sortedEmployees.length === 0) {
-    container.innerHTML = `
-      <div class="text-center py-5 text-muted">
-        <i class="bi bi-calendar-x display-6 d-block mb-2 opacity-50"></i>
-        No shifts found for this month.
-      </div>
-    `;
-    return;
-  }
 
   let html = '<div class="month-matrix-wrapper">';
   html += '<table class="month-matrix-table">';
@@ -640,6 +757,10 @@ function renderMonthMatrix(shifts) {
 
   // Body: one row per employee
   html += '<tbody>';
+  if (sortedEmployees.length === 0) {
+    html += `<tr><td class="month-matrix-employee-name text-muted" colspan="${daysInMonth + 1}">No employees found for this view.</td></tr>`;
+  }
+
   sortedEmployees.forEach((emp) => {
     html += '<tr>';
     html += `<td class="month-matrix-employee-name">${escapeHtml(emp.full_name)}</td>`;
@@ -666,9 +787,23 @@ function renderMonthMatrix(shifts) {
         </div>`;
       });
 
+      // Leave pills
+      const cellLeaves = leaveMap[emp.id]?.[dateStr] || [];
+      const leaveTypeLabels = { sick: 'Sick', vacation: 'Vacation', personal: 'Personal', other: 'Leave' };
+      cellLeaves.forEach((lr) => {
+        const isPending = lr.status === 'pending';
+        const typeLabel = leaveTypeLabels[lr.leave_type] || 'Leave';
+        const pendingCls = isPending ? ' matrix-leave-pending' : '';
+        cellHtml += `<div class="matrix-leave-pill${pendingCls}" title="${typeLabel}${isPending ? ' (pending)' : ''}">
+          <i class="bi bi-airplane"></i>
+        </div>`;
+      });
+
+      const hasApprovedLeave = cellLeaves.some((lr) => lr.status === 'approved');
       const todayClass = isToday ? ' matrix-today-cell' : '';
       const weekendClass = isWeekend ? ' matrix-weekend' : '';
-      html += `<td class="month-matrix-cell${todayClass}${weekendClass}" data-date="${dateStr}" data-employee="${emp.id}">${cellHtml}</td>`;
+      const leaveCellClass = hasApprovedLeave ? ' matrix-leave-cell' : '';
+      html += `<td class="month-matrix-cell${todayClass}${weekendClass}${leaveCellClass}" data-date="${dateStr}" data-employee="${emp.id}">${cellHtml}</td>`;
     }
 
     html += '</tr>';
@@ -676,6 +811,55 @@ function renderMonthMatrix(shifts) {
   html += '</tbody></table></div>';
 
   container.innerHTML = html;
+}
+
+// ── Leave conflict check (shift modal) ──────────────────────────────────────
+
+async function updateLeaveConflictWarning() {
+  const warningEl = document.getElementById('leave-conflict-warning');
+  const saveBtn   = document.getElementById('shift-save-btn');
+  const employeeId = isManager
+    ? document.getElementById('shift-employee').value
+    : currentUser.id;
+  const shiftDate = document.getElementById('shift-date').value;
+
+  // In edit mode, skip check when setting status to non-scheduled
+  const statusField = document.getElementById('status-field');
+  if (!statusField.classList.contains('d-none')) {
+    const statusVal = document.getElementById('shift-status').value;
+    if (statusVal && statusVal !== 'scheduled') {
+      warningEl.classList.add('d-none');
+      saveBtn.disabled = false;
+      return;
+    }
+  }
+
+  if (!employeeId || !shiftDate) {
+    warningEl.classList.add('d-none');
+    saveBtn.disabled = false;
+    return;
+  }
+
+  const { data } = await supabase
+    .from('leave_requests')
+    .select('id, start_date, end_date, leave_type')
+    .eq('employee_id', employeeId)
+    .eq('status', 'approved')
+    .lte('start_date', shiftDate)
+    .gte('end_date', shiftDate)
+    .limit(1);
+
+  if (data?.length > 0) {
+    const lr = data[0];
+    const typeLabel = { sick: 'Sick Leave', vacation: 'Vacation', personal: 'Personal', other: 'Other' }[lr.leave_type] || lr.leave_type;
+    warningEl.querySelector('.leave-conflict-text').textContent =
+      `This employee has approved ${typeLabel} from ${lr.start_date} to ${lr.end_date}. Shifts cannot be created during this period.`;
+    warningEl.classList.remove('d-none');
+    saveBtn.disabled = true;
+  } else {
+    warningEl.classList.add('d-none');
+    saveBtn.disabled = false;
+  }
 }
 
 // ── Modal: Shift create / edit ───────────────────────────────────────────────
@@ -721,6 +905,10 @@ function openShiftModal(shiftId) {
     document.getElementById('shift-status').value = shift.status;
     document.getElementById('shift-notes').value = shift.notes || '';
   }
+
+  // Clear any stale leave conflict warning
+  document.getElementById('leave-conflict-warning').classList.add('d-none');
+  document.getElementById('shift-save-btn').disabled = false;
 
   shiftModalInstance.show();
 }
@@ -775,7 +963,15 @@ async function handleShiftSave() {
 
   if (error) {
     console.error('Shift save error:', error);
-    showToast(error.message || 'Could not save shift.', 'danger');
+    if (error.message?.includes('LEAVE_CONFLICT')) {
+      const warningEl = document.getElementById('leave-conflict-warning');
+      warningEl.querySelector('.leave-conflict-text').textContent =
+        'Cannot create shift: this employee has an approved leave during the selected date.';
+      warningEl.classList.remove('d-none');
+      saveBtn.disabled = true;
+    } else {
+      showToast(error.message || 'Could not save shift.', 'danger');
+    }
     return;
   }
 

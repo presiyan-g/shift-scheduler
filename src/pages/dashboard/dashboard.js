@@ -194,6 +194,9 @@ async function init() {
   // 10. Transfer requests widget
   await expireStaleRequests();
   await loadTransferWidget(user.id, isManager, managedTeams);
+
+  // 11. Leave requests widget
+  await loadLeaveWidget(user.id, isManager);
 }
 
 // ── Transfer widget ──
@@ -234,6 +237,53 @@ async function loadTransferWidget(userId, isManager, managedTeams) {
       widget.className = 'alert alert-info d-flex align-items-center justify-content-between mb-4';
       heading.textContent = 'Incoming Transfer Requests';
       body.textContent = `${count} teammate${count > 1 ? 's' : ''} ${count > 1 ? 'have' : 'has'} asked you to take their shift.`;
+    }
+  }
+
+  if (count > 0) {
+    widget.classList.remove('d-none');
+  }
+}
+
+// ── Leave widget ──
+
+async function loadLeaveWidget(userId, isManager) {
+  const widget = document.getElementById('leave-widget');
+  if (!widget) return;
+
+  const heading = document.getElementById('leave-widget-heading');
+  const body    = document.getElementById('leave-widget-body');
+  let count = 0;
+
+  if (isManager) {
+    // Count pending leave requests visible to this manager (RLS auto-scopes to team)
+    const { count: pendingCount } = await supabase
+      .from('leave_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .neq('employee_id', userId);
+
+    count = pendingCount ?? 0;
+
+    if (count > 0) {
+      widget.className = 'alert alert-warning d-flex align-items-center justify-content-between mb-4';
+      heading.textContent = 'Leave Requests Awaiting Review';
+      body.textContent = `${count} leave request${count > 1 ? 's' : ''} need${count === 1 ? 's' : ''} your review.`;
+    }
+  } else {
+    // Employee: count own pending leave requests
+    const { count: pendingCount } = await supabase
+      .from('leave_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('employee_id', userId)
+      .eq('status', 'pending');
+
+    count = pendingCount ?? 0;
+
+    if (count > 0) {
+      widget.className = 'alert alert-info d-flex align-items-center justify-content-between mb-4';
+      heading.textContent = 'Leave Requests';
+      body.textContent = `You have ${count} pending leave request${count > 1 ? 's' : ''}.`;
     }
   }
 
