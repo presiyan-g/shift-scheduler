@@ -696,8 +696,8 @@ function openShiftModal(shiftId) {
     shiftIdEl.value = '';
     statusField.classList.add('d-none');
     saveLabelEl.textContent = 'Save Shift';
-    // Pre-fill date with the current week's Monday as a convenience
-    document.getElementById('shift-date').value = toDateString(currentWeekStart);
+    // Pre-fill date with today's date
+    document.getElementById('shift-date').value = toDateString(new Date());
   } else {
     // Edit mode
     const shift = currentShifts.find((s) => s.id === shiftId);
