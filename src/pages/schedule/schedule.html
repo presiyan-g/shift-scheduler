@@ -24,14 +24,32 @@
         </h1>
         <p class="text-muted mb-0 small" id="schedule-subtitle">Loading...</p>
       </div>
-      <!-- Manager/Admin controls -->
-      <div class="d-flex align-items-center gap-2">
+      <!-- Page header controls -->
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <!-- "My Shifts Only" toggle — visible to all users -->
+        <div class="form-check form-switch mb-0 d-flex align-items-center gap-1">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="my-shifts-toggle"
+          />
+          <label class="form-check-label small text-nowrap" for="my-shifts-toggle">
+            My shifts only
+          </label>
+        </div>
+
+        <!-- Manager/Admin: team filter dropdown -->
         <select class="form-select form-select-sm d-none" id="team-filter" style="max-width: 220px;">
           <option value="">All My Teams</option>
         </select>
-        <button class="btn btn-primary btn-sm d-none d-inline-flex align-items-center" id="add-shift-btn" type="button">
+
+        <!-- Manager/Admin: add shift button -->
+        <button class="btn btn-primary btn-sm d-none d-inline-flex align-items-center gap-1" id="add-shift-btn" type="button">
           <i class="bi bi-plus-lg"></i><span class="text-nowrap">Add Shift</span>
         </button>
+
       </div>
     </div>
 

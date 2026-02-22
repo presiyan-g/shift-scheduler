@@ -323,6 +323,32 @@
   }
 }
 
+/* ── Team View: employee name on shift cards ── */
+
+.shift-employee-name {
+  font-size: 0.72rem;
+  color: var(--bs-secondary);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.month-cal-shift-emp {
+  font-size: 0.63rem;
+  color: var(--bs-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  display: block;
+}
+
+@media (max-width: 575.98px) {
+  .month-cal-shift-emp { display: none; }
+}
+
 /* ── Header controls ── */
 
 #add-shift-btn {

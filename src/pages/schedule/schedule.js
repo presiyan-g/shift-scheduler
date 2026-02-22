@@ -22,6 +22,7 @@ let shiftModalInstance = null;
 let deleteModalInstance = null;
 let transferModalInstance = null;
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
+let myShiftsOnly = false;  // toggle: true = current user's shifts only
 
 // Monthly view state
 let currentView = 'week';       // 'week' | 'month'
@@ -64,9 +65,7 @@ async function init() {
   renderNavbar({ activePage: 'schedule', role: userRole, isTeamManager, userName: profile.full_name, avatarUrl: profile.avatar_url });
 
   // Subtitle text
-  document.getElementById('schedule-subtitle').textContent = isManager
-    ? 'Viewing team shifts for the week'
-    : 'Viewing your shifts for the week';
+  updateSubtitle();
 
   if (isManager) {
     document.getElementById('add-shift-btn').classList.remove('d-none');
@@ -145,6 +144,16 @@ async function init() {
   await loadWeek();
 }
 
+// ── Subtitle helper ──────────────────────────────────────────────────────────
+
+function updateSubtitle() {
+  const el = document.getElementById('schedule-subtitle');
+  const period = currentView === 'week' ? 'week' : 'month';
+  el.textContent = myShiftsOnly
+    ? `Viewing your shifts for the ${period}`
+    : `Viewing team shifts for the ${period}`;
+}
+
 // ── Event listeners ──────────────────────────────────────────────────────────
 
 function attachEventListeners() {
@@ -216,6 +225,17 @@ function attachEventListeners() {
     }
   });
 
+  // "My shifts only" toggle
+  document.getElementById('my-shifts-toggle').addEventListener('change', async (e) => {
+    myShiftsOnly = e.target.checked;
+    updateSubtitle();
+    if (currentView === 'week') {
+      await loadWeek();
+    } else {
+      await loadMonth();
+    }
+  });
+
   // Team dropdown in shift modal — reload employees when team changes
   document.getElementById('shift-team').addEventListener('change', async (e) => {
     const teamId = e.target.value;
@@ -251,17 +271,34 @@ function attachEventListeners() {
     }
   });
 
-  // Manager matrix: click shift pill to edit, click empty cell to add
+  // Matrix: click shift pill — managers edit, employees transfer (own eligible shifts only)
   document.getElementById('month-matrix-container').addEventListener('click', (e) => {
     const pill = e.target.closest('.matrix-shift-pill');
     if (pill) {
-      openShiftModal(pill.dataset.shiftId);
+      if (isManager) {
+        openShiftModal(pill.dataset.shiftId);
+      } else {
+        const shift = currentShifts.find((s) => s.id === pill.dataset.shiftId);
+        const today = toDateString(new Date());
+        if (
+          shift &&
+          shift.employee_id === currentUser.id &&
+          shift.status === 'scheduled' &&
+          shift.shift_date >= today &&
+          shift.team_id &&
+          !pendingTransferShiftIds.has(shift.id)
+        ) {
+          openTransferModal(shift.id, shift.team_id);
+        }
+      }
       return;
     }
 
-    const cell = e.target.closest('.month-matrix-cell');
-    if (cell && cell.dataset.date && cell.dataset.employee) {
-      openShiftModalPrefilled(cell.dataset.date, cell.dataset.employee);
+    if (isManager) {
+      const cell = e.target.closest('.month-matrix-cell');
+      if (cell && cell.dataset.date && cell.dataset.employee) {
+        openShiftModalPrefilled(cell.dataset.date, cell.dataset.employee);
+      }
     }
   });
 }
@@ -284,19 +321,13 @@ function switchView(view) {
   document.getElementById('month-nav').classList.toggle('d-none', view !== 'month');
 
   document.getElementById('week-grid').classList.toggle('d-none', view !== 'week');
-  document.getElementById('month-calendar-grid').classList.toggle('d-none', view !== 'month' || isManager);
-  document.getElementById('month-matrix-container').classList.toggle('d-none', view !== 'month' || !isManager);
+  document.getElementById('month-calendar-grid').classList.add('d-none');
+  document.getElementById('month-matrix-container').classList.toggle('d-none', view !== 'month');
 
-  const subtitleEl = document.getElementById('schedule-subtitle');
+  updateSubtitle();
   if (view === 'week') {
-    subtitleEl.textContent = isManager
-      ? 'Viewing team shifts for the week'
-      : 'Viewing your shifts for the week';
     loadWeek();
   } else {
-    subtitleEl.textContent = isManager
-      ? 'Viewing team shifts for the month'
-      : 'Viewing your shifts for the month';
     if (!currentMonthDate) {
       currentMonthDate = getMonthStart(currentWeekStart);
     }
@@ -310,8 +341,8 @@ async function loadMonth() {
   const loading = document.getElementById('schedule-loading');
   const calGrid = document.getElementById('month-calendar-grid');
   const matrixContainer = document.getElementById('month-matrix-container');
-  const activeGrid = isManager ? matrixContainer : calGrid;
-  const inactiveGrid = isManager ? calGrid : matrixContainer;
+  const activeGrid = matrixContainer;
+  const inactiveGrid = calGrid;
 
   loading.classList.remove('d-none');
   activeGrid.classList.add('d-none');
@@ -326,7 +357,7 @@ async function loadMonth() {
 
   let query = supabase
     .from('shifts')
-    .select('*, employee:profiles!employee_id(full_name)')
+    .select('*, employee:profiles!employee_id(id, full_name)')
     .gte('shift_date', startStr)
     .lte('shift_date', endStr)
     .order('start_time', { ascending: true });
@@ -335,8 +366,8 @@ async function loadMonth() {
     query = query.eq('team_id', selectedTeamId);
   }
 
-  // Non-managers: only show own shifts (RLS may expose transferred shifts via transfer request policy)
-  if (!isManager) {
+  // Honour "My shifts only" toggle for any role
+  if (myShiftsOnly) {
     query = query.eq('employee_id', currentUser.id);
   }
 
@@ -352,11 +383,7 @@ async function loadMonth() {
 
   currentShifts = shifts || [];
 
-  if (isManager) {
-    renderMonthMatrix(currentShifts);
-  } else {
-    renderMonthCalendar(currentShifts);
-  }
+  renderMonthMatrix(currentShifts);
 
   loading.classList.add('d-none');
   activeGrid.classList.remove('d-none');
@@ -379,7 +406,7 @@ async function loadWeek() {
 
   let query = supabase
     .from('shifts')
-    .select('*, employee:profiles!employee_id(full_name)')
+    .select('*, employee:profiles!employee_id(id, full_name)')
     .gte('shift_date', weekStartStr)
     .lte('shift_date', weekEndStr)
     .order('start_time', { ascending: true });
@@ -389,8 +416,8 @@ async function loadWeek() {
     query = query.eq('team_id', selectedTeamId);
   }
 
-  // Non-managers: only show own shifts (RLS may expose transferred shifts via transfer request policy)
-  if (!isManager) {
+  // Honour "My shifts only" toggle for any role
+  if (myShiftsOnly) {
     query = query.eq('employee_id', currentUser.id);
   }
 
@@ -486,14 +513,17 @@ function buildShiftCardHtml(shift) {
     cancelled: 'bg-danger-subtle text-danger',
   }[shift.status] || 'bg-secondary-subtle text-secondary';
 
-  const employeeRow = isManager
-    ? `<div class="text-muted mt-1">
-         <i class="bi bi-person me-1"></i>${escapeHtml(shift.employee?.full_name || '—')}
+  // Show employee name when viewing someone else's shift
+  const isOwnShift = shift.employee_id === currentUser.id;
+  const employeeRow = !isOwnShift
+    ? `<div class="shift-employee-name mt-1">
+         <i class="bi bi-person-fill me-1"></i>${escapeHtml(shift.employee?.full_name || '—')}
        </div>`
     : '';
 
   let actionBtns = '';
   if (isManager) {
+    // Managers/admins: always show edit and delete
     actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
          <button
            class="btn btn-sm btn-outline-secondary py-0 px-1 edit-shift-btn"
@@ -508,12 +538,8 @@ function buildShiftCardHtml(shift) {
            type="button"
          ><i class="bi bi-trash"></i></button>
        </div>`;
-  } else if (
-    shift.employee_id === currentUser.id &&
-    shift.status === 'scheduled' &&
-    shift.shift_date >= toDateString(new Date()) &&
-    shift.team_id
-  ) {
+  } else if (isOwnShift && shift.status === 'scheduled' && shift.shift_date >= toDateString(new Date()) && shift.team_id) {
+    // Employee's own eligible shift: show transfer button
     if (pendingTransferShiftIds.has(shift.id)) {
       actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
         <span class="badge bg-warning-subtle text-warning rounded-pill" style="font-size:0.68rem;">
@@ -533,6 +559,7 @@ function buildShiftCardHtml(shift) {
       </div>`;
     }
   }
+  // else: teammate's shift → no action buttons (read-only)
 
   return `
     <div class="shift-card p-2 rounded border ${statusClass}">
@@ -549,69 +576,7 @@ function buildShiftCardHtml(shift) {
   `;
 }
 
-// ── Monthly renderers ────────────────────────────────────────────────────────
-
-function renderMonthCalendar(shifts) {
-  const grid = document.getElementById('month-calendar-grid');
-  grid.innerHTML = '';
-
-  const today = toDateString(new Date());
-  const calendarDays = getCalendarDays(currentMonthDate);
-  const currentMonth = currentMonthDate.getMonth();
-
-  // Build shifts lookup: dateString -> [shift, ...]
-  const shiftsByDate = {};
-  shifts.forEach((s) => {
-    if (!shiftsByDate[s.shift_date]) shiftsByDate[s.shift_date] = [];
-    shiftsByDate[s.shift_date].push(s);
-  });
-
-  let html = '<div class="month-calendar">';
-  html += '<div class="month-cal-header">';
-  ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((day) => {
-    html += `<div class="month-cal-header-cell">${day}</div>`;
-  });
-  html += '</div>';
-
-  html += '<div class="month-cal-body">';
-  calendarDays.forEach((dayDate) => {
-    const dateStr = toDateString(dayDate);
-    const isToday = dateStr === today;
-    const isCurrentMonth = dayDate.getMonth() === currentMonth;
-    const dayShifts = shiftsByDate[dateStr] || [];
-
-    const todayClass = isToday ? ' month-cal-today' : '';
-    const dimClass = !isCurrentMonth ? ' month-cal-outside' : '';
-
-    let cellContent = `<div class="month-cal-day-number${isToday ? ' text-primary fw-bold' : ''}">${dayDate.getDate()}</div>`;
-
-    const maxVisible = 3;
-    const visible = dayShifts.slice(0, maxVisible);
-    const remaining = dayShifts.length - maxVisible;
-
-    visible.forEach((s) => {
-      const statusClass = `shift-status-${s.status}`;
-      const canTransfer = s.employee_id === currentUser.id && s.status === 'scheduled' && s.shift_date >= today && s.team_id;
-      const transferClass = canTransfer ? ' month-cal-shift-clickable' : '';
-      const transferAttrs = canTransfer ? ` data-shift-id="${s.id}" data-team-id="${s.team_id}" role="button"` : '';
-      cellContent += `
-        <div class="month-cal-shift ${statusClass}${transferClass}" title="${escapeHtml(s.title)} ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}"${transferAttrs}>
-          <span class="month-cal-shift-time">${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}</span>
-          <span class="month-cal-shift-title text-truncate">${escapeHtml(s.title || 'Shift')}</span>
-        </div>
-      `;
-    });
-
-    if (remaining > 0) {
-      cellContent += `<div class="month-cal-more text-muted">+${remaining} more</div>`;
-    }
-
-    html += `<div class="month-cal-cell${todayClass}${dimClass}" data-date="${dateStr}">${cellContent}</div>`;
-  });
-  html += '</div></div>';
-
-  grid.innerHTML = html;
-}
+// ── Monthly renderer ─────────────────────────────────────────────────────────
 
 function renderMonthMatrix(shifts) {
   const container = document.getElementById('month-matrix-container');
@@ -994,29 +959,6 @@ function getMonthEnd(date) {
 
 function getDaysInMonth(date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-}
-
-function getCalendarDays(monthDate) {
-  const first = getMonthStart(monthDate);
-  const last = getMonthEnd(monthDate);
-
-  const startDay = first.getDay(); // 0=Sun
-  const leadingDays = startDay === 0 ? 6 : startDay - 1;
-  const calStart = new Date(first);
-  calStart.setDate(calStart.getDate() - leadingDays);
-
-  const endDay = last.getDay();
-  const trailingDays = endDay === 0 ? 0 : 7 - endDay;
-  const calEnd = new Date(last);
-  calEnd.setDate(calEnd.getDate() + trailingDays);
-
-  const days = [];
-  const d = new Date(calStart);
-  while (d <= calEnd) {
-    days.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return days;
 }
 
 function formatMonthLabel(date) {
