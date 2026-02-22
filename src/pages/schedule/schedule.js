@@ -3,6 +3,7 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getAllTeams, getManagedTeams, getTeamEmployees } from '@shared/teams.js';
+import { createTransferRequest, getTransferTargets } from '@shared/transfers.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ let currentShifts = [];      // cached after each loadWeek()/loadMonth() for edi
 let pendingDeleteId = null;  // shift UUID awaiting deletion confirm
 let shiftModalInstance = null;
 let deleteModalInstance = null;
+let transferModalInstance = null;
+let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 
 // Monthly view state
 let currentView = 'week';       // 'week' | 'month'
@@ -123,12 +126,18 @@ async function init() {
   // Bootstrap modal instances
   shiftModalInstance = new bootstrap.Modal(document.getElementById('shift-modal'));
   deleteModalInstance = new bootstrap.Modal(document.getElementById('delete-modal'));
+  transferModalInstance = new bootstrap.Modal(document.getElementById('transfer-modal'));
 
   // Reset form validation state when modal closes
   document.getElementById('shift-modal').addEventListener('hidden.bs.modal', () => {
     const form = document.getElementById('shift-form');
     form.classList.remove('was-validated');
   });
+
+  // Load pending transfer request IDs for the current employee
+  if (!isManager) {
+    await loadPendingTransferIds();
+  }
 
   attachEventListeners();
   await loadWeek();
@@ -170,12 +179,14 @@ function attachEventListeners() {
     openShiftModal(null);
   });
 
-  // Delegated click on the week grid for edit/delete buttons
+  // Delegated click on the week grid for edit/delete/transfer buttons
   document.getElementById('week-grid').addEventListener('click', (e) => {
     const editBtn = e.target.closest('.edit-shift-btn');
     const deleteBtn = e.target.closest('.delete-shift-btn');
+    const transferBtn = e.target.closest('.request-transfer-btn');
     if (editBtn) openShiftModal(editBtn.dataset.shiftId);
     if (deleteBtn) openDeleteModal(deleteBtn.dataset.shiftId);
+    if (transferBtn) openTransferModal(transferBtn.dataset.shiftId, transferBtn.dataset.teamId);
   });
 
   document.getElementById('shift-save-btn').addEventListener('click', () => {
@@ -184,6 +195,10 @@ function attachEventListeners() {
 
   document.getElementById('confirm-delete-btn').addEventListener('click', () => {
     handleDeleteConfirm();
+  });
+
+  document.getElementById('transfer-submit-btn').addEventListener('click', () => {
+    handleTransferSubmit();
   });
 
   // Team filter change — reload shifts and employees for selected team
@@ -212,8 +227,20 @@ function attachEventListeners() {
     }
   });
 
-  // Employee calendar: click a day cell to navigate to that week
+  // Employee calendar: click shift pill for transfer, or click day cell to navigate
   document.getElementById('month-calendar-grid').addEventListener('click', (e) => {
+    const transferBtn = e.target.closest('.request-transfer-btn');
+    if (transferBtn) {
+      e.stopPropagation();
+      openTransferModal(transferBtn.dataset.shiftId, transferBtn.dataset.teamId);
+      return;
+    }
+    const shiftPill = e.target.closest('.month-cal-shift-clickable');
+    if (shiftPill && shiftPill.dataset.shiftId) {
+      e.stopPropagation();
+      openTransferModal(shiftPill.dataset.shiftId, shiftPill.dataset.teamId);
+      return;
+    }
     const cell = e.target.closest('.month-cal-cell');
     if (cell && cell.dataset.date) {
       const clickedDate = new Date(cell.dataset.date + 'T00:00:00');
@@ -306,6 +333,11 @@ async function loadMonth() {
     query = query.eq('team_id', selectedTeamId);
   }
 
+  // Non-managers: only show own shifts (RLS may expose transferred shifts via transfer request policy)
+  if (!isManager) {
+    query = query.eq('employee_id', currentUser.id);
+  }
+
   const { data: shifts, error } = await query;
 
   if (error) {
@@ -353,6 +385,11 @@ async function loadWeek() {
   // Filter by selected team (managers/admins)
   if (selectedTeamId) {
     query = query.eq('team_id', selectedTeamId);
+  }
+
+  // Non-managers: only show own shifts (RLS may expose transferred shifts via transfer request policy)
+  if (!isManager) {
+    query = query.eq('employee_id', currentUser.id);
   }
 
   const { data: shifts, error } = await query;
@@ -453,8 +490,9 @@ function buildShiftCardHtml(shift) {
        </div>`
     : '';
 
-  const actionBtns = isManager
-    ? `<div class="d-flex gap-1 mt-2 justify-content-end">
+  let actionBtns = '';
+  if (isManager) {
+    actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
          <button
            class="btn btn-sm btn-outline-secondary py-0 px-1 edit-shift-btn"
            data-shift-id="${shift.id}"
@@ -467,8 +505,32 @@ function buildShiftCardHtml(shift) {
            title="Delete shift"
            type="button"
          ><i class="bi bi-trash"></i></button>
-       </div>`
-    : '';
+       </div>`;
+  } else if (
+    shift.employee_id === currentUser.id &&
+    shift.status === 'scheduled' &&
+    shift.shift_date >= toDateString(new Date()) &&
+    shift.team_id
+  ) {
+    if (pendingTransferShiftIds.has(shift.id)) {
+      actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
+        <span class="badge bg-warning-subtle text-warning rounded-pill" style="font-size:0.68rem;">
+          <i class="bi bi-hourglass-split me-1"></i>Transfer Pending
+        </span>
+      </div>`;
+    } else {
+      actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
+        <button
+          class="btn btn-sm btn-outline-primary py-0 px-2 request-transfer-btn"
+          data-shift-id="${shift.id}"
+          data-team-id="${shift.team_id}"
+          title="Request shift transfer"
+          type="button"
+          style="font-size:0.72rem;"
+        ><i class="bi bi-arrow-right-circle me-1"></i>Transfer</button>
+      </div>`;
+    }
+  }
 
   return `
     <div class="shift-card p-2 rounded border ${statusClass}">
@@ -527,8 +589,11 @@ function renderMonthCalendar(shifts) {
 
     visible.forEach((s) => {
       const statusClass = `shift-status-${s.status}`;
+      const canTransfer = s.employee_id === currentUser.id && s.status === 'scheduled' && s.shift_date >= today && s.team_id;
+      const transferClass = canTransfer ? ' month-cal-shift-clickable' : '';
+      const transferAttrs = canTransfer ? ` data-shift-id="${s.id}" data-team-id="${s.team_id}" role="button"` : '';
       cellContent += `
-        <div class="month-cal-shift ${statusClass}" title="${escapeHtml(s.title)} ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}">
+        <div class="month-cal-shift ${statusClass}${transferClass}" title="${escapeHtml(s.title)} ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}"${transferAttrs}>
           <span class="month-cal-shift-time">${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}</span>
           <span class="month-cal-shift-title text-truncate">${escapeHtml(s.title || 'Shift')}</span>
         </div>
@@ -790,6 +855,96 @@ async function handleDeleteConfirm() {
   } else {
     await loadMonth();
   }
+}
+
+// ── Transfer request ─────────────────────────────────────────────────────────
+
+async function loadPendingTransferIds() {
+  const { data } = await supabase
+    .from('shift_transfer_requests')
+    .select('shift_id')
+    .eq('requester_id', currentUser.id)
+    .in('status', ['pending_target', 'pending_manager']);
+
+  pendingTransferShiftIds = new Set((data || []).map((r) => r.shift_id));
+}
+
+async function openTransferModal(shiftId, teamId) {
+  const shift = currentShifts.find((s) => s.id === shiftId);
+  if (!shift || !teamId) return;
+
+  document.getElementById('transfer-shift-summary').innerHTML = `
+    <strong>${escapeHtml(shift.title || 'Shift')}</strong><br>
+    <small class="text-muted">
+      <i class="bi bi-calendar3 me-1"></i>${shift.shift_date} &middot;
+      <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
+    </small>
+  `;
+
+  document.getElementById('transfer-shift-id').value = shiftId;
+  document.getElementById('transfer-team-id').value = teamId;
+
+  const form = document.getElementById('transfer-form');
+  form.reset();
+  form.classList.remove('was-validated');
+
+  const targetSelect = document.getElementById('transfer-target');
+  targetSelect.innerHTML = '<option value="">Loading teammates...</option>';
+  targetSelect.disabled = true;
+
+  transferModalInstance.show();
+
+  const targets = await getTransferTargets(teamId, currentUser.id);
+  targetSelect.innerHTML = '<option value="">— Select teammate —</option>';
+  targets.forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.full_name;
+    targetSelect.appendChild(opt);
+  });
+  targetSelect.disabled = false;
+}
+
+async function handleTransferSubmit() {
+  const form = document.getElementById('transfer-form');
+  form.classList.add('was-validated');
+  if (!form.checkValidity()) return;
+
+  const btn = document.getElementById('transfer-submit-btn');
+  const spinner = document.getElementById('transfer-submit-spinner');
+  btn.disabled = true;
+  spinner.classList.remove('d-none');
+
+  const shiftId = document.getElementById('transfer-shift-id').value;
+  const teamId = document.getElementById('transfer-team-id').value;
+  const targetId = document.getElementById('transfer-target').value;
+  const note = document.getElementById('transfer-note').value.trim();
+
+  const shift = currentShifts.find((s) => s.id === shiftId);
+
+  const { error } = await createTransferRequest({
+    shiftId,
+    teamId,
+    requesterId: currentUser.id,
+    targetId,
+    requesterNote: note,
+    expiresAt: `${shift?.shift_date}T${shift?.start_time}`,
+  });
+
+  btn.disabled = false;
+  spinner.classList.add('d-none');
+
+  if (error) {
+    showToast(error.message || 'Could not send transfer request.', 'danger');
+    return;
+  }
+
+  transferModalInstance.hide();
+  showToast('Transfer request sent. Waiting for your teammate to accept.', 'success');
+
+  pendingTransferShiftIds.add(shiftId);
+  if (currentView === 'week') await loadWeek();
+  else await loadMonth();
 }
 
 // ── Date / time helpers ──────────────────────────────────────────────────────

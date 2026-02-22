@@ -26,8 +26,8 @@ export function renderNavbar({
   const navLinks = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'bi-speedometer2' },
     { key: 'schedule', label: 'Schedule', href: '/schedule', icon: 'bi-calendar3' },
+    { key: 'transfers', label: 'Transfers', href: '/transfers', icon: 'bi-arrow-left-right' },
     // Future pages — uncomment as they are built:
-    // { key: 'swaps', label: 'Swaps', href: '/swaps', icon: 'bi-arrow-left-right' },
     // { key: 'leave', label: 'Leave', href: '/leave', icon: 'bi-airplane' },
   ];
 

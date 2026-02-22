@@ -3,9 +3,16 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
+import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/transfers.js';
+
+let currentUser = null;
+let transferModalInstance = null;
+let pendingTransferShiftIds = new Set();
+let dashboardShifts = []; // cached upcoming shifts for transfer lookup
 
 async function init() {
   const user = await requireAuth();
+  currentUser = user;
 
   renderNavbar({ activePage: 'dashboard' });
 
@@ -154,11 +161,25 @@ async function init() {
   const { count: todayCount } = await todayQuery;
   document.getElementById('stat-today').textContent = todayCount ?? 0;
 
-  // 7. Render shift lists
+  // 7. Load pending transfer IDs for employees and init transfer modal
+  dashboardShifts = upcomingShifts || [];
+  if (!isManager) {
+    await loadPendingTransferIds();
+    transferModalInstance = new bootstrap.Modal(document.getElementById('transfer-modal'));
+
+    document.getElementById('upcoming-shifts-list').addEventListener('click', (e) => {
+      const btn = e.target.closest('.request-transfer-btn');
+      if (btn) openTransferModal(btn.dataset.shiftId, btn.dataset.teamId);
+    });
+
+    document.getElementById('transfer-submit-btn').addEventListener('click', handleTransferSubmit);
+  }
+
+  // 8. Render shift lists
   renderUpcomingShifts(upcomingShifts || [], isManager);
   renderRecentShifts(recentShifts || [], isManager);
 
-  // 8. Manager banner
+  // 9. Manager banner
   if (isManager) {
     document.getElementById('manager-banner').classList.remove('d-none');
     const teamLabel = profile.role === 'admin'
@@ -166,6 +187,56 @@ async function init() {
       : `${managedTeams.length} team(s)`;
     document.getElementById('manager-team-summary').textContent =
       `${todayCount ?? 0} shift(s) scheduled for today across ${teamLabel}.`;
+  }
+
+  // 10. Transfer requests widget
+  await expireStaleRequests();
+  await loadTransferWidget(user.id, isManager, managedTeams);
+}
+
+// ── Transfer widget ──
+
+async function loadTransferWidget(userId, isManager, managedTeams) {
+  const widget = document.getElementById('transfer-widget');
+  if (!widget) return;
+
+  const heading = document.getElementById('transfer-widget-heading');
+  const body = document.getElementById('transfer-widget-body');
+  let count = 0;
+
+  if (isManager) {
+    const teamIds = managedTeams.map((mt) => mt.team.id);
+    if (teamIds.length > 0) {
+      const { count: managerCount } = await supabase
+        .from('shift_transfer_requests')
+        .select('id', { count: 'exact', head: true })
+        .in('team_id', teamIds)
+        .eq('status', 'pending_manager');
+      count = managerCount ?? 0;
+    }
+
+    if (count > 0) {
+      widget.className = 'alert alert-warning d-flex align-items-center justify-content-between mb-4';
+      heading.textContent = 'Transfers Awaiting Approval';
+      body.textContent = `${count} transfer request${count > 1 ? 's' : ''} need${count === 1 ? 's' : ''} your approval.`;
+    }
+  } else {
+    const { count: incomingCount } = await supabase
+      .from('shift_transfer_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_id', userId)
+      .eq('status', 'pending_target');
+    count = incomingCount ?? 0;
+
+    if (count > 0) {
+      widget.className = 'alert alert-info d-flex align-items-center justify-content-between mb-4';
+      heading.textContent = 'Incoming Transfer Requests';
+      body.textContent = `${count} teammate${count > 1 ? 's' : ''} ${count > 1 ? 'have' : 'has'} asked you to take their shift.`;
+    }
+  }
+
+  if (count > 0) {
+    widget.classList.remove('d-none');
   }
 }
 
@@ -242,12 +313,103 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Transfer helpers ──
+
+async function loadPendingTransferIds() {
+  const { data } = await supabase
+    .from('shift_transfer_requests')
+    .select('shift_id')
+    .eq('requester_id', currentUser.id)
+    .in('status', ['pending_target', 'pending_manager']);
+
+  pendingTransferShiftIds = new Set((data || []).map((r) => r.shift_id));
+}
+
+async function openTransferModal(shiftId, teamId) {
+  const shift = dashboardShifts.find((s) => s.id === shiftId);
+  if (!shift || !teamId) return;
+
+  document.getElementById('transfer-shift-summary').innerHTML = `
+    <strong>${escapeHtml(shift.title || 'Shift')}</strong><br>
+    <small class="text-muted">
+      <i class="bi bi-calendar3 me-1"></i>${shift.shift_date} &middot;
+      <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
+    </small>
+  `;
+
+  document.getElementById('transfer-shift-id').value = shiftId;
+  document.getElementById('transfer-team-id').value = teamId;
+
+  const form = document.getElementById('transfer-form');
+  form.reset();
+  form.classList.remove('was-validated');
+
+  const targetSelect = document.getElementById('transfer-target');
+  targetSelect.innerHTML = '<option value="">Loading teammates...</option>';
+  targetSelect.disabled = true;
+
+  transferModalInstance.show();
+
+  const targets = await getTransferTargets(teamId, currentUser.id);
+  targetSelect.innerHTML = '<option value="">— Select teammate —</option>';
+  targets.forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.full_name;
+    targetSelect.appendChild(opt);
+  });
+  targetSelect.disabled = false;
+}
+
+async function handleTransferSubmit() {
+  const form = document.getElementById('transfer-form');
+  form.classList.add('was-validated');
+  if (!form.checkValidity()) return;
+
+  const btn = document.getElementById('transfer-submit-btn');
+  const spinner = document.getElementById('transfer-submit-spinner');
+  btn.disabled = true;
+  spinner.classList.remove('d-none');
+
+  const shiftId = document.getElementById('transfer-shift-id').value;
+  const teamId = document.getElementById('transfer-team-id').value;
+  const targetId = document.getElementById('transfer-target').value;
+  const note = document.getElementById('transfer-note').value.trim();
+
+  const shift = dashboardShifts.find((s) => s.id === shiftId);
+
+  const { error } = await createTransferRequest({
+    shiftId,
+    teamId,
+    requesterId: currentUser.id,
+    targetId,
+    requesterNote: note,
+    expiresAt: `${shift?.shift_date}T${shift?.start_time}`,
+  });
+
+  btn.disabled = false;
+  spinner.classList.add('d-none');
+
+  if (error) {
+    showToast(error.message || 'Could not send transfer request.', 'danger');
+    return;
+  }
+
+  transferModalInstance.hide();
+  showToast('Transfer request sent. Waiting for your teammate to accept.', 'success');
+
+  // Update local state and re-render
+  pendingTransferShiftIds.add(shiftId);
+  renderUpcomingShifts(dashboardShifts, false);
+}
+
 // ── Render functions ──
 
 function renderUpcomingShifts(shifts, isManager) {
   const container = document.getElementById('upcoming-shifts-list');
   const emptyEl = document.getElementById('upcoming-empty');
   const countBadge = document.getElementById('upcoming-count');
+  const today = toDateString(new Date());
 
   countBadge.textContent = shifts.length;
 
@@ -257,24 +419,39 @@ function renderUpcomingShifts(shifts, isManager) {
 
   emptyEl.classList.add('d-none');
 
-  container.innerHTML = shifts.map(shift => `
-    <div class="d-flex align-items-center px-3 py-3 border-bottom shift-row">
-      <div class="me-3 text-center" style="min-width: 50px;">
-        <div class="fw-bold text-primary" style="font-size: 0.85rem;">
-          ${formatDate(shift.shift_date).split(', ')[0] || ''}
+  container.innerHTML = shifts.map(shift => {
+    // Show transfer action for employee's own scheduled future shifts with a team
+    let transferAction = '';
+    if (!isManager && shift.employee_id === currentUser.id && shift.status === 'scheduled' && shift.shift_date >= today && shift.team_id) {
+      if (pendingTransferShiftIds.has(shift.id)) {
+        transferAction = `<span class="badge bg-warning-subtle text-warning rounded-pill ms-2" style="font-size:0.68rem;"><i class="bi bi-hourglass-split me-1"></i>Transfer Pending</span>`;
+      } else {
+        transferAction = `<button class="btn btn-sm btn-outline-primary py-0 px-2 ms-2 request-transfer-btn" data-shift-id="${shift.id}" data-team-id="${shift.team_id}" title="Request shift transfer" type="button" style="font-size:0.72rem;"><i class="bi bi-arrow-right-circle me-1"></i>Transfer</button>`;
+      }
+    }
+
+    return `
+      <div class="d-flex align-items-center px-3 py-3 border-bottom shift-row">
+        <div class="me-3 text-center" style="min-width: 50px;">
+          <div class="fw-bold text-primary" style="font-size: 0.85rem;">
+            ${formatDate(shift.shift_date).split(', ')[0] || ''}
+          </div>
+          <small class="text-muted">${formatDate(shift.shift_date).split(', ')[1] || formatDate(shift.shift_date)}</small>
         </div>
-        <small class="text-muted">${formatDate(shift.shift_date).split(', ')[1] || formatDate(shift.shift_date)}</small>
+        <div class="flex-grow-1">
+          <div class="fw-semibold">${escapeHtml(shift.title || 'Shift')}</div>
+          <small class="text-muted">
+            <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
+            ${isManager ? `<span class="ms-2"><i class="bi bi-person me-1"></i>${escapeHtml(shift.employee?.full_name || 'Unknown')}</span>` : ''}
+          </small>
+        </div>
+        <div class="d-flex align-items-center">
+          <span class="badge bg-primary-subtle text-primary rounded-pill">${shift.status}</span>
+          ${transferAction}
+        </div>
       </div>
-      <div class="flex-grow-1">
-        <div class="fw-semibold">${escapeHtml(shift.title || 'Shift')}</div>
-        <small class="text-muted">
-          <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
-          ${isManager ? `<span class="ms-2"><i class="bi bi-person me-1"></i>${escapeHtml(shift.employee?.full_name || 'Unknown')}</span>` : ''}
-        </small>
-      </div>
-      <span class="badge bg-primary-subtle text-primary rounded-pill">${shift.status}</span>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function renderRecentShifts(shifts, isManager) {

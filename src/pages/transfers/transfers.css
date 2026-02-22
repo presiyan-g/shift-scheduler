@@ -1,0 +1,17 @@
+/* Status-colored left border on request cards */
+.transfer-card-pending_target  { border-left: 3px solid var(--bs-warning) !important; }
+.transfer-card-pending_manager { border-left: 3px solid var(--bs-info) !important; }
+.transfer-card-approved        { border-left: 3px solid var(--bs-success) !important; }
+.transfer-card-rejected,
+.transfer-card-declined        { border-left: 3px solid var(--bs-danger) !important; opacity: 0.75; }
+.transfer-card-cancelled       { border-left: 3px solid var(--bs-secondary) !important; opacity: 0.6; }
+.transfer-card-expired         { border-left: 3px solid var(--bs-secondary) !important; opacity: 0.6; }
+
+/* Empty state containers */
+.transfers-empty {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}

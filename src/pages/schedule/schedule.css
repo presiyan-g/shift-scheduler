@@ -138,6 +138,17 @@
   white-space: nowrap;
 }
 
+.month-cal-shift-clickable {
+  cursor: pointer;
+  outline: 1px dashed transparent;
+  transition: outline-color 0.15s, background-color 0.15s;
+}
+
+.month-cal-shift-clickable:hover {
+  outline-color: var(--bs-primary);
+  background-color: rgba(13, 110, 253, 0.1);
+}
+
 .month-cal-shift-time {
   font-weight: 600;
   flex-shrink: 0;

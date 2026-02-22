@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Shift Scheduler** is a web application for small companies (10–50 employees) to manage work shifts, time-off requests, and shift swaps. Managers create and assign shifts; employees view their schedules and submit requests. An admin oversees the entire organization.
+**Shift Scheduler** is a web application for small companies (10–50 employees) to manage work shifts, time-off requests, and shift transfers. Managers create and assign shifts; employees view their schedules and submit requests. An admin oversees the entire organization.
 
 **Target users:** Small restaurants, retail shops, clinics, warehouses — any team that runs on shifts.
 
@@ -66,10 +66,10 @@ shift-scheduler/
 │   │   │   ├── schedule.html
 │   │   │   ├── schedule.js
 │   │   │   └── schedule.css
-│   │   ├── swaps/              ← shift swap requests
-│   │   │   ├── swaps.html
-│   │   │   ├── swaps.js
-│   │   │   └── swaps.css
+│   │   ├── transfers/              ← shift transfer requests
+│   │   │   ├── transfers.html
+│   │   │   ├── transfers.js
+│   │   │   └── transfers.css
 │   │   ├── leave/              ← time-off / leave requests
 │   │   │   ├── leave.html
 │   │   │   ├── leave.js
@@ -98,7 +98,7 @@ shift-scheduler/
 - Register page (`/register`) — new account creation
 - Dashboard (my shifts, my pending requests)
 - Team schedule (calendar/list view)
-- Swap requests, Leave requests
+- Transfer requests, Leave requests
 - Profile
 
 ## Database Migrations

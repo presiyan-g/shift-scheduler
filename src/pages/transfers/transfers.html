@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <title>Transfers — ShiftScheduler</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <link rel="stylesheet" href="/src/shared/navbar.css" />
+  <link rel="stylesheet" href="/src/pages/transfers/transfers.css" />
+</head>
+<body class="bg-light">
+
+  <!-- Navbar rendered by shared/navbar.js -->
+
+  <main class="container py-4">
+
+    <div class="mb-4">
+      <h1 class="fw-bold fs-3 mb-0">
+        <i class="bi bi-arrow-left-right me-2 text-primary"></i>Shift Transfers
+      </h1>
+      <p class="text-muted small mb-0">Manage transfer requests for your shifts</p>
+    </div>
+
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs mb-3" id="transfers-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="my-requests-tab" data-bs-toggle="tab"
+                data-bs-target="#my-requests" type="button" role="tab">
+          <i class="bi bi-send me-1"></i>My Requests
+          <span class="badge bg-secondary rounded-pill ms-1 d-none" id="my-requests-badge">0</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="incoming-tab" data-bs-toggle="tab"
+                data-bs-target="#incoming" type="button" role="tab">
+          <i class="bi bi-inbox me-1"></i>Incoming
+          <span class="badge bg-danger rounded-pill ms-1 d-none" id="incoming-badge">0</span>
+        </button>
+      </li>
+      <li class="nav-item d-none" id="manager-queue-tab-item" role="presentation">
+        <button class="nav-link" id="manager-queue-tab" data-bs-toggle="tab"
+                data-bs-target="#manager-queue" type="button" role="tab">
+          <i class="bi bi-clipboard-check me-1"></i>Manager Queue
+          <span class="badge bg-warning text-dark rounded-pill ms-1 d-none" id="manager-queue-badge">0</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="transfers-tab-content">
+      <!-- My Requests tab -->
+      <div class="tab-pane fade show active" id="my-requests" role="tabpanel">
+        <div id="my-requests-list"></div>
+      </div>
+
+      <!-- Incoming tab -->
+      <div class="tab-pane fade" id="incoming" role="tabpanel">
+        <div id="incoming-list"></div>
+      </div>
+
+      <!-- Manager Queue tab -->
+      <div class="tab-pane fade" id="manager-queue" role="tabpanel">
+        <div id="manager-queue-list"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Action Modal ── -->
+  <div class="modal fade" id="action-modal" tabindex="-1" aria-labelledby="action-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="action-modal-label">Respond to Transfer Request</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-light border mb-3 py-2 px-3" id="action-shift-summary"></div>
+          <div class="mb-3" id="action-note-field">
+            <label for="action-note" class="form-label fw-medium">
+              Note <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            <textarea class="form-control" id="action-note" rows="2" maxlength="500"
+                      placeholder="Add a message..."></textarea>
+          </div>
+          <input type="hidden" id="action-request-id" />
+          <input type="hidden" id="action-type" />
+        </div>
+        <div class="modal-footer border-0 pt-0 gap-2" id="action-modal-footer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/src/pages/transfers/transfers.js"></script>
+</body>
+</html>

@@ -15,6 +15,7 @@ const pageRewrites = {
   '/teams':     '/src/pages/teams/teams.html',
   '/profile':   '/src/pages/profile/profile.html',
   '/account':   '/src/pages/account/account.html',
+  '/transfers': '/src/pages/transfers/transfers.html',
 };
 
 // Redirect legacy .html routes to clean paths so URLs stay extensionless.
@@ -27,6 +28,7 @@ const legacyPathRedirects = {
   '/teams.html':     '/teams',
   '/profile.html':   '/profile',
   '/account.html':   '/account',
+  '/transfers.html': '/transfers',
 };
 
 const rewritePlugin = {
@@ -74,6 +76,7 @@ export default defineConfig({
         teams:     resolve(__dirname, 'src/pages/teams/teams.html'),
         profile:   resolve(__dirname, 'src/pages/profile/profile.html'),
         account:   resolve(__dirname, 'src/pages/account/account.html'),
+        transfers: resolve(__dirname, 'src/pages/transfers/transfers.html'),
       },
     },
   },
