@@ -115,10 +115,8 @@ function attachEventListeners() {
 
   // Delegated clicks on the members table
   document.getElementById('members-tbody').addEventListener('click', (e) => {
-    const toggleBtn = e.target.closest('.toggle-role-btn');
     const removeBtn = e.target.closest('.remove-member-btn');
 
-    if (toggleBtn) handleToggleRole(toggleBtn.dataset.memberId);
     if (removeBtn) {
       const member = currentMembers.find((m) => m.id === removeBtn.dataset.memberId);
       openDeleteConfirm('member', removeBtn.dataset.memberId, member?.profile?.full_name || 'this member');
@@ -235,9 +233,6 @@ function renderMembersTable() {
           <td>${appRoleBadge}</td>
           <td>${teamRoleBadge}</td>
           <td class="text-end pe-3">
-            <button class="btn btn-sm btn-outline-secondary me-1 toggle-role-btn" data-member-id="${member.id}" title="Toggle team role" type="button">
-              <i class="bi bi-arrow-repeat me-1"></i>${member.role === 'manager' ? 'Make Member' : 'Make Manager'}
-            </button>
             <button class="btn btn-sm btn-outline-danger remove-member-btn" data-member-id="${member.id}" title="Remove from team" type="button">
               <i class="bi bi-x-lg"></i>
             </button>
@@ -414,29 +409,6 @@ async function handleMemberSave() {
 
   memberModalInstance.hide();
   showToast('Member added.', 'success');
-  await loadTeamDetail(currentTeamId);
-}
-
-// ── Toggle member team role ─────────────────────────────────────────────────
-
-async function handleToggleRole(memberId) {
-  const member = currentMembers.find((m) => m.id === memberId);
-  if (!member) return;
-
-  const newRole = member.role === 'manager' ? 'member' : 'manager';
-
-  const { error } = await supabase
-    .from('team_members')
-    .update({ role: newRole })
-    .eq('id', memberId);
-
-  if (error) {
-    console.error('Role toggle error:', error);
-    showToast(error.message || 'Could not change role.', 'danger');
-    return;
-  }
-
-  showToast(`Role changed to ${newRole}.`, 'success');
   await loadTeamDetail(currentTeamId);
 }
 
