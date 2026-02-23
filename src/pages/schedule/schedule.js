@@ -405,7 +405,7 @@ async function loadMonth() {
   let leaveMonthQuery = supabase
     .from('leave_requests')
     .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
-    .in('status', ['approved', 'pending'])
+    .eq('status', 'approved')
     .lte('start_date', endStr)
     .gte('end_date', startStr);
   if (myShiftsOnly) leaveMonthQuery = leaveMonthQuery.eq('employee_id', currentUser.id);
@@ -518,7 +518,7 @@ async function loadWeek() {
   let leaveWeekQuery = supabase
     .from('leave_requests')
     .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
-    .in('status', ['approved', 'pending'])
+    .eq('status', 'approved')
     .lte('start_date', weekEndStr)
     .gte('end_date', weekStartStr);
   if (myShiftsOnly) leaveWeekQuery = leaveWeekQuery.eq('employee_id', currentUser.id);
@@ -594,10 +594,8 @@ function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts, dayLeaves = []
     const isOwn = lr.employee_id === currentUser.id;
     const name = isOwn ? 'You' : escapeHtml(lr.employee?.full_name || '—');
     const typeLabel = typeLabels[lr.leave_type] || 'Leave';
-    const isPending = lr.status === 'pending';
-    const cls = isPending ? 'leave-banner-pending' : 'leave-banner-approved';
-    return `<div class="leave-day-banner ${cls}">
-      <i class="bi bi-airplane me-1"></i>${name} — ${typeLabel}${isPending ? ' <em class="text-muted">(pending)</em>' : ''}
+    return `<div class="leave-day-banner leave-banner-approved">
+      <i class="bi bi-airplane me-1"></i>${name} — ${typeLabel}
     </div>`;
   }).join('');
 
@@ -804,15 +802,13 @@ function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
       const cellLeaves = leaveMap[emp.id]?.[dateStr] || [];
       const leaveTypeLabels = { sick: 'Sick', vacation: 'Vacation', personal: 'Personal', other: 'Leave' };
       cellLeaves.forEach((lr) => {
-        const isPending = lr.status === 'pending';
         const typeLabel = leaveTypeLabels[lr.leave_type] || 'Leave';
-        const pendingCls = isPending ? ' matrix-leave-pending' : '';
-        cellHtml += `<div class="matrix-leave-pill${pendingCls}" title="${typeLabel}${isPending ? ' (pending)' : ''}">
+        cellHtml += `<div class="matrix-leave-pill" title="${typeLabel}">
           <i class="bi bi-airplane"></i>
         </div>`;
       });
 
-      const hasApprovedLeave = cellLeaves.some((lr) => lr.status === 'approved');
+      const hasApprovedLeave = cellLeaves.length > 0;
       const todayClass = isToday ? ' matrix-today-cell' : '';
       const weekendClass = isWeekend ? ' matrix-weekend' : '';
       const leaveCellClass = hasApprovedLeave ? ' matrix-leave-cell' : '';
