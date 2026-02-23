@@ -162,11 +162,30 @@
               <div class="invalid-feedback">Please enter a shift title.</div>
             </div>
 
+            <!-- Date mode toggle (hidden in edit mode) -->
+            <div class="mb-2" id="date-mode-toggle-wrap">
+              <div class="btn-group btn-group-sm w-100" role="group" aria-label="Date selection mode">
+                <input type="radio" class="btn-check" name="shift-date-mode" id="mode-single" value="single" autocomplete="off" checked />
+                <label class="btn btn-outline-secondary" for="mode-single">
+                  <i class="bi bi-calendar-event me-1"></i>Single
+                </label>
+                <input type="radio" class="btn-check" name="shift-date-mode" id="mode-range" value="range" autocomplete="off" />
+                <label class="btn btn-outline-secondary" for="mode-range">
+                  <i class="bi bi-calendar-range me-1"></i>Range
+                </label>
+                <input type="radio" class="btn-check" name="shift-date-mode" id="mode-multiple" value="multiple" autocomplete="off" />
+                <label class="btn btn-outline-secondary" for="mode-multiple">
+                  <i class="bi bi-calendar3 me-1"></i>Custom
+                </label>
+              </div>
+            </div>
+
             <!-- Date -->
             <div class="mb-3">
-              <label for="shift-date" class="form-label fw-medium">Date</label>
+              <label for="shift-date" class="form-label fw-medium" id="shift-date-label">Date</label>
               <input type="text" class="form-control" id="shift-date" required autocomplete="off" />
-              <div class="invalid-feedback">Please select a date.</div>
+              <div class="invalid-feedback" id="shift-date-feedback">Please select a date.</div>
+              <div class="form-text d-none" id="shift-date-hint"></div>
             </div>
 
             <!-- Start / End time -->

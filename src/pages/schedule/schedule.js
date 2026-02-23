@@ -23,6 +23,7 @@ let shiftModalInstance = null;
 let deleteModalInstance = null;
 let transferModalInstance = null;
 let shiftDatePicker = null;
+let shiftDateMode = 'single'; // 'single' | 'range' | 'multiple'
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 let myShiftsOnly = false;  // toggle: true = current user's shifts only
 
@@ -252,6 +253,13 @@ function attachEventListeners() {
   document.getElementById('shift-employee').addEventListener('change', debouncedLeaveConflictWarning);
   document.getElementById('shift-date').addEventListener('change', debouncedLeaveConflictWarning);
   document.getElementById('shift-status').addEventListener('change', debouncedLeaveConflictWarning);
+
+  // Date mode toggle
+  document.querySelectorAll('input[name="shift-date-mode"]').forEach((radio) => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.checked) onDateModeChange(e.target.value);
+    });
+  });
 
   // Employee calendar: click shift pill for transfer, or click day cell to navigate
   document.getElementById('month-calendar-grid').addEventListener('click', (e) => {
@@ -954,7 +962,7 @@ async function updateLeaveConflictWarning() {
   const employeeId = isManager
     ? document.getElementById('shift-employee').value
     : currentUser.id;
-  const shiftDate = getShiftDateValue();
+  const dates = getShiftDateValue();
 
   // In edit mode, skip check when setting status to non-scheduled
   const statusField = document.getElementById('status-field');
@@ -967,26 +975,41 @@ async function updateLeaveConflictWarning() {
     }
   }
 
-  if (!employeeId || !shiftDate) {
+  if (!employeeId || dates.length === 0) {
     warningEl.classList.add('d-none');
     saveBtn.disabled = false;
     return;
   }
+
+  const minDate = dates.reduce((a, b) => a < b ? a : b);
+  const maxDate = dates.reduce((a, b) => a > b ? a : b);
 
   const { data } = await supabase
     .from('leave_requests')
     .select('id, start_date, end_date, leave_type')
     .eq('employee_id', employeeId)
     .eq('status', 'approved')
-    .lte('start_date', shiftDate)
-    .gte('end_date', shiftDate)
-    .limit(1);
+    .lte('start_date', maxDate)
+    .gte('end_date', minDate);
 
-  if (data?.length > 0) {
+  if (!data || data.length === 0) {
+    warningEl.classList.add('d-none');
+    saveBtn.disabled = false;
+    return;
+  }
+
+  const conflictingDates = dates.filter((d) =>
+    data.some((lr) => d >= lr.start_date && d <= lr.end_date)
+  );
+
+  if (conflictingDates.length > 0) {
     const lr = data[0];
     const typeLabel = { sick: 'Sick Leave', vacation: 'Vacation', personal: 'Personal', other: 'Other' }[lr.leave_type] || lr.leave_type;
-    warningEl.querySelector('.leave-conflict-text').textContent =
-      `This employee has approved ${typeLabel} from ${lr.start_date} to ${lr.end_date}. Shifts cannot be created during this period.`;
+    const count = conflictingDates.length;
+    const isSingle = shiftDateMode === 'single';
+    warningEl.querySelector('.leave-conflict-text').textContent = isSingle
+      ? `This employee has approved ${typeLabel} from ${lr.start_date} to ${lr.end_date}. Shifts cannot be created during this period.`
+      : `${count} of the selected date${count > 1 ? 's' : ''} conflict with an approved ${typeLabel} (${lr.start_date} to ${lr.end_date}). Shifts cannot be created on those dates.`;
     warningEl.classList.remove('d-none');
     saveBtn.disabled = true;
   } else {
@@ -1008,7 +1031,12 @@ function openShiftModal(shiftId) {
   const saveLabelEl = document.getElementById('shift-save-label');
 
   if (!shiftId) {
-    // Create mode
+    // Create mode — reset toggle to Single
+    const singleRadio = document.getElementById('mode-single');
+    if (singleRadio) singleRadio.checked = true;
+    onDateModeChange('single');
+    document.getElementById('date-mode-toggle-wrap').classList.remove('d-none');
+
     titleEl.textContent = 'Add Shift';
     shiftIdEl.value = '';
     statusField.classList.add('d-none');
@@ -1016,7 +1044,10 @@ function openShiftModal(shiftId) {
     // Pre-fill date with today's date
     setShiftDateValue(toDateString(new Date()));
   } else {
-    // Edit mode
+    // Edit mode — hide toggle, force single picker
+    document.getElementById('date-mode-toggle-wrap').classList.add('d-none');
+    onDateModeChange('single');
+
     const shift = currentShifts.find((s) => s.id === shiftId);
     if (!shift) return;
 
@@ -1057,59 +1088,122 @@ function openShiftModalPrefilled(dateStr, employeeId) {
 async function handleShiftSave() {
   const form = document.getElementById('shift-form');
   form.classList.add('was-validated');
+
+  const dateInput = document.getElementById('shift-date');
+  dateInput.setCustomValidity('');
+
+  const dates = getShiftDateValue();
+  if (dates.length === 0) {
+    dateInput.setCustomValidity('Please select a date.');
+    form.classList.add('was-validated');
+    return;
+  }
+
   if (!form.checkValidity()) return;
 
-  const saveBtn = document.getElementById('shift-save-btn');
-  const spinner = document.getElementById('shift-save-spinner');
+  const saveBtn     = document.getElementById('shift-save-btn');
+  const spinner     = document.getElementById('shift-save-spinner');
+  const saveLabelEl = document.getElementById('shift-save-label');
   saveBtn.disabled = true;
   spinner.classList.remove('d-none');
 
   const shiftId = document.getElementById('shift-id').value;
-  const isEdit = Boolean(shiftId);
+  const isEdit  = Boolean(shiftId);
 
-  const payload = {
+  const basePayload = {
     employee_id: isManager
       ? document.getElementById('shift-employee').value
       : currentUser.id,
-    title: document.getElementById('shift-title').value.trim(),
-    shift_date: getShiftDateValue(),
+    title:      document.getElementById('shift-title').value.trim(),
     start_time: document.getElementById('shift-start').value,
-    end_time: document.getElementById('shift-end').value,
-    notes: document.getElementById('shift-notes').value.trim() || null,
-    team_id: isManager
+    end_time:   document.getElementById('shift-end').value,
+    notes:      document.getElementById('shift-notes').value.trim() || null,
+    team_id:    isManager
       ? document.getElementById('shift-team').value || null
       : null,
   };
 
   if (isEdit) {
-    payload.status = document.getElementById('shift-status').value;
-  } else {
-    payload.created_by = currentUser.id;
-  }
+    // Edit mode: single date, unchanged behavior
+    const payload = {
+      ...basePayload,
+      shift_date: dates[0],
+      status: document.getElementById('shift-status').value,
+    };
 
-  const { error } = isEdit
-    ? await supabase.from('shifts').update(payload).eq('id', shiftId)
-    : await supabase.from('shifts').insert(payload);
+    const { error } = await supabase.from('shifts').update(payload).eq('id', shiftId);
 
-  saveBtn.disabled = false;
-  spinner.classList.add('d-none');
+    saveBtn.disabled = false;
+    spinner.classList.add('d-none');
 
-  if (error) {
-    console.error('Shift save error:', error);
-    if (error.message?.includes('LEAVE_CONFLICT')) {
-      const warningEl = document.getElementById('leave-conflict-warning');
-      warningEl.querySelector('.leave-conflict-text').textContent =
-        'Cannot create shift: this employee has an approved leave during the selected date.';
-      warningEl.classList.remove('d-none');
-      saveBtn.disabled = true;
-    } else {
-      showToast(error.message || 'Could not save shift.', 'danger');
+    if (error) {
+      console.error('Shift save error:', error);
+      if (error.message?.includes('LEAVE_CONFLICT')) {
+        const warningEl = document.getElementById('leave-conflict-warning');
+        warningEl.querySelector('.leave-conflict-text').textContent =
+          'Cannot create shift: this employee has an approved leave during the selected date.';
+        warningEl.classList.remove('d-none');
+        saveBtn.disabled = true;
+      } else {
+        showToast(error.message || 'Could not save shift.', 'danger');
+      }
+      return;
     }
-    return;
+
+    shiftModalInstance.hide();
+    showToast('Shift updated.', 'success');
+
+  } else {
+    // Create mode: one insert per date
+    const totalDates = dates.length;
+    if (totalDates > 1) {
+      saveLabelEl.textContent = `Creating ${totalDates} shifts...`;
+    }
+
+    let successCount = 0;
+    const errors = [];
+
+    for (const date of dates) {
+      const payload = { ...basePayload, shift_date: date, created_by: currentUser.id };
+      const { error } = await supabase.from('shifts').insert(payload);
+      if (error) {
+        console.error(`Shift insert error for ${date}:`, error);
+        errors.push({ date, error });
+      } else {
+        successCount++;
+      }
+    }
+
+    saveBtn.disabled = false;
+    spinner.classList.add('d-none');
+    saveLabelEl.textContent = 'Save Shift';
+
+    if (errors.length === 0) {
+      shiftModalInstance.hide();
+      const msg = totalDates === 1 ? 'Shift created.' : `${successCount} shifts created.`;
+      showToast(msg, 'success');
+    } else if (successCount > 0) {
+      shiftModalInstance.hide();
+      showToast(
+        `${successCount} shift${successCount > 1 ? 's' : ''} created. ${errors.length} failed — check console for details.`,
+        'warning',
+        6000
+      );
+    } else {
+      const firstError = errors[0].error;
+      if (firstError.message?.includes('LEAVE_CONFLICT')) {
+        const warningEl = document.getElementById('leave-conflict-warning');
+        warningEl.querySelector('.leave-conflict-text').textContent =
+          'Cannot create shift: this employee has an approved leave during one or more selected dates.';
+        warningEl.classList.remove('d-none');
+        saveBtn.disabled = true;
+      } else {
+        showToast(firstError.message || 'Could not create shifts.', 'danger');
+      }
+      return;
+    }
   }
 
-  shiftModalInstance.hide();
-  showToast(isEdit ? 'Shift updated.' : 'Shift created.', 'success');
   if (currentView === 'week') {
     await loadWeek();
   } else {
@@ -1117,19 +1211,60 @@ async function handleShiftSave() {
   }
 }
 
-function initShiftDatePicker() {
+function initShiftDatePicker(mode = 'single') {
   const dateInput = document.getElementById('shift-date');
   if (!dateInput || typeof window.flatpickr !== 'function') return;
 
-  shiftDatePicker = window.flatpickr(dateInput, {
+  if (shiftDatePicker) {
+    shiftDatePicker.destroy();
+    shiftDatePicker = null;
+  }
+
+  const commonConfig = {
     dateFormat: 'Y-m-d',
-    locale: {
-      firstDayOfWeek: 1,
-    },
+    locale: { firstDayOfWeek: 1 },
     onChange: () => {
       dateInput.dispatchEvent(new Event('change', { bubbles: true }));
     },
-  });
+  };
+
+  if (mode === 'range') {
+    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'range' });
+  } else if (mode === 'multiple') {
+    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'multiple', conjunction: ', ' });
+  } else {
+    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'single' });
+  }
+}
+
+function onDateModeChange(newMode) {
+  shiftDateMode = newMode;
+  initShiftDatePicker(newMode);
+
+  const label    = document.getElementById('shift-date-label');
+  const hint     = document.getElementById('shift-date-hint');
+  const feedback = document.getElementById('shift-date-feedback');
+
+  if (newMode === 'single') {
+    label.textContent = 'Date';
+    hint.classList.add('d-none');
+    hint.textContent = '';
+    feedback.textContent = 'Please select a date.';
+  } else if (newMode === 'range') {
+    label.textContent = 'Date Range';
+    hint.textContent = 'Select a start and end date. One shift will be created for each day.';
+    hint.classList.remove('d-none');
+    feedback.textContent = 'Please select a date range.';
+  } else {
+    label.textContent = 'Dates';
+    hint.textContent = 'Click individual dates to select them. One shift will be created per date.';
+    hint.classList.remove('d-none');
+    feedback.textContent = 'Please select at least one date.';
+  }
+
+  document.getElementById('shift-date').value = '';
+  document.getElementById('leave-conflict-warning').classList.add('d-none');
+  document.getElementById('shift-save-btn').disabled = false;
 }
 
 function setShiftDateValue(dateStr) {
@@ -1141,10 +1276,30 @@ function setShiftDateValue(dateStr) {
 }
 
 function getShiftDateValue() {
-  if (shiftDatePicker) {
-    return shiftDatePicker.input.value;
+  if (!shiftDatePicker) {
+    const raw = document.getElementById('shift-date').value.trim();
+    return raw ? [raw] : [];
   }
-  return document.getElementById('shift-date').value;
+
+  const selectedDates = shiftDatePicker.selectedDates;
+
+  if (shiftDateMode === 'range') {
+    if (selectedDates.length < 2) return [];
+    const result = [];
+    const cur = new Date(selectedDates[0]);
+    const end = new Date(selectedDates[1]);
+    cur.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    while (cur <= end) {
+      result.push(toDateString(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return result;
+  } else if (shiftDateMode === 'multiple') {
+    return selectedDates.map((d) => toDateString(d));
+  } else {
+    return selectedDates.length > 0 ? [toDateString(selectedDates[0])] : [];
+  }
 }
 
 // ── Modal: Delete confirm ────────────────────────────────────────────────────
