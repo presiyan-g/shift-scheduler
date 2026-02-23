@@ -890,7 +890,7 @@ function renderMyMonthCalendar(shifts, leaves = []) {
   const monthStart = getMonthStart(currentMonthDate);
   const monthYear = monthStart.getFullYear();
   const monthNum = monthStart.getMonth();
-  const firstDayOffset = monthStart.getDay(); // 0=Sun
+  const firstDayOffset = (monthStart.getDay() + 6) % 7; // 0=Mon
 
   const gridStart = new Date(monthYear, monthNum, 1 - firstDayOffset);
   const days = Array.from({ length: 42 }, (_, index) => {
@@ -918,7 +918,7 @@ function renderMyMonthCalendar(shifts, leaves = []) {
     }
   });
 
-  const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekDayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   let html = '<div class="month-calendar">';
   html += '<div class="month-cal-header">';
