@@ -24,6 +24,7 @@ let deleteModalInstance = null;
 let transferModalInstance = null;
 let shiftDatePicker = null;
 let shiftDateMode = 'single'; // 'single' | 'range' | 'multiple'
+let employeeExistingShiftDates = new Set(); // dates the selected employee already has a shift
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 let myShiftsOnly = false;  // toggle: true = current user's shifts only
 
@@ -249,9 +250,16 @@ function attachEventListeners() {
     await updateLeaveConflictWarning();
   });
 
-  // Leave conflict check: re-run when employee, date, or status changes in the shift modal
-  document.getElementById('shift-employee').addEventListener('change', debouncedLeaveConflictWarning);
-  document.getElementById('shift-date').addEventListener('change', debouncedLeaveConflictWarning);
+  // Leave conflict + existing-shift checks: re-run when employee, date, or status changes
+  document.getElementById('shift-employee').addEventListener('change', async (e) => {
+    await loadEmployeeExistingShifts(e.target.value);
+    debouncedLeaveConflictWarning();
+    debouncedShiftConflictWarning();
+  });
+  document.getElementById('shift-date').addEventListener('change', () => {
+    debouncedLeaveConflictWarning();
+    debouncedShiftConflictWarning();
+  });
   document.getElementById('shift-status').addEventListener('change', debouncedLeaveConflictWarning);
 
   // Date mode toggle
@@ -949,6 +957,7 @@ function debounce(fn, delay) {
 }
 
 const debouncedLeaveConflictWarning = debounce(updateLeaveConflictWarning, 350);
+const debouncedShiftConflictWarning = debounce(updateShiftConflictWarning, 350);
 
 // ── Leave conflict check (shift modal) ──────────────────────────────────────
 
@@ -1014,6 +1023,57 @@ async function updateLeaveConflictWarning() {
   }
 }
 
+// ── Load existing shifts for selected employee (used by date picker dots) ────
+
+async function loadEmployeeExistingShifts(employeeId) {
+  employeeExistingShiftDates = new Set();
+  if (employeeId) {
+    const today = new Date();
+    const fromDate = toDateString(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+    const toDate   = toDateString(new Date(today.getFullYear() + 1, today.getMonth(), today.getDate()));
+
+    const { data } = await supabase
+      .from('shifts')
+      .select('shift_date')
+      .eq('employee_id', employeeId)
+      .gte('shift_date', fromDate)
+      .lte('shift_date', toDate);
+
+    if (data) data.forEach((s) => employeeExistingShiftDates.add(s.shift_date));
+  }
+  // Re-init picker so onDayCreate marks the freshly loaded dates
+  initShiftDatePicker(shiftDateMode);
+}
+
+// ── Existing shift conflict warning (non-blocking) ───────────────────────────
+
+function updateShiftConflictWarning() {
+  const warningEl = document.getElementById('shift-conflict-warning');
+  // Only relevant in create mode
+  if (document.getElementById('shift-id').value) {
+    warningEl.classList.add('d-none');
+    return;
+  }
+
+  const dates = getShiftDateValue();
+  if (dates.length === 0 || employeeExistingShiftDates.size === 0) {
+    warningEl.classList.add('d-none');
+    return;
+  }
+
+  const conflicting = dates.filter((d) => employeeExistingShiftDates.has(d));
+  if (conflicting.length > 0) {
+    const count    = conflicting.length;
+    const dateList = conflicting.slice(0, 3).join(', ') + (conflicting.length > 3 ? '…' : '');
+    warningEl.querySelector('.shift-conflict-text').textContent = shiftDateMode === 'single'
+      ? `This employee already has a shift on ${conflicting[0]}.`
+      : `${count} selected date${count > 1 ? 's' : ''} already have a shift: ${dateList}.`;
+    warningEl.classList.remove('d-none');
+  } else {
+    warningEl.classList.add('d-none');
+  }
+}
+
 // ── Modal: Shift create / edit ───────────────────────────────────────────────
 
 function openShiftModal(shiftId) {
@@ -1028,6 +1088,7 @@ function openShiftModal(shiftId) {
 
   if (!shiftId) {
     // Create mode — reset toggle to Single
+    employeeExistingShiftDates = new Set();
     const singleRadio = document.getElementById('mode-single');
     if (singleRadio) singleRadio.checked = true;
     onDateModeChange('single');
@@ -1066,8 +1127,9 @@ function openShiftModal(shiftId) {
     document.getElementById('shift-notes').value = shift.notes || '';
   }
 
-  // Clear any stale leave conflict warning
+  // Clear any stale warnings
   document.getElementById('leave-conflict-warning').classList.add('d-none');
+  document.getElementById('shift-conflict-warning').classList.add('d-none');
   document.getElementById('shift-save-btn').disabled = false;
 
   shiftModalInstance.show();
@@ -1078,6 +1140,7 @@ function openShiftModalPrefilled(dateStr, employeeId) {
   setShiftDateValue(dateStr);
   if (employeeId) {
     document.getElementById('shift-employee').value = employeeId;
+    loadEmployeeExistingShifts(employeeId).then(() => updateShiftConflictWarning());
   }
 }
 
@@ -1219,6 +1282,13 @@ function initShiftDatePicker(mode = 'single') {
   const commonConfig = {
     dateFormat: 'Y-m-d',
     locale: { firstDayOfWeek: 1 },
+    onDayCreate: (_dObj, _dStr, _fp, dayElem) => {
+      if (!dayElem.dateObj) return;
+      const dateStr = toDateString(dayElem.dateObj);
+      if (employeeExistingShiftDates.has(dateStr)) {
+        dayElem.classList.add('has-existing-shift');
+      }
+    },
     onChange: () => {
       dateInput.dispatchEvent(new Event('change', { bubbles: true }));
     },

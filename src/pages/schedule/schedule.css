@@ -363,6 +363,31 @@
   gap: 0.35rem;
 }
 
+/* ── Flatpickr: dot indicator for days with existing shifts ── */
+
+.flatpickr-day.has-existing-shift {
+  position: relative;
+}
+
+.flatpickr-day.has-existing-shift::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--bs-primary);
+  pointer-events: none;
+}
+
+.flatpickr-day.has-existing-shift.selected::after,
+.flatpickr-day.has-existing-shift.startRange::after,
+.flatpickr-day.has-existing-shift.endRange::after {
+  background-color: #fff;
+}
+
 /* ── Loading state ── */
 
 #schedule-loading {
