@@ -22,6 +22,7 @@ let pendingDeleteId = null;  // shift UUID awaiting deletion confirm
 let shiftModalInstance = null;
 let deleteModalInstance = null;
 let transferModalInstance = null;
+let shiftDatePicker = null;
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 let myShiftsOnly = false;  // toggle: true = current user's shifts only
 
@@ -124,6 +125,7 @@ async function init() {
   shiftModalInstance = new bootstrap.Modal(document.getElementById('shift-modal'));
   deleteModalInstance = new bootstrap.Modal(document.getElementById('delete-modal'));
   transferModalInstance = new bootstrap.Modal(document.getElementById('transfer-modal'));
+  initShiftDatePicker();
 
   // Reset form validation state when modal closes
   document.getElementById('shift-modal').addEventListener('hidden.bs.modal', () => {
@@ -952,7 +954,7 @@ async function updateLeaveConflictWarning() {
   const employeeId = isManager
     ? document.getElementById('shift-employee').value
     : currentUser.id;
-  const shiftDate = document.getElementById('shift-date').value;
+  const shiftDate = getShiftDateValue();
 
   // In edit mode, skip check when setting status to non-scheduled
   const statusField = document.getElementById('status-field');
@@ -1012,7 +1014,7 @@ function openShiftModal(shiftId) {
     statusField.classList.add('d-none');
     saveLabelEl.textContent = 'Save Shift';
     // Pre-fill date with today's date
-    document.getElementById('shift-date').value = toDateString(new Date());
+    setShiftDateValue(toDateString(new Date()));
   } else {
     // Edit mode
     const shift = currentShifts.find((s) => s.id === shiftId);
@@ -1030,7 +1032,7 @@ function openShiftModal(shiftId) {
       document.getElementById('shift-employee').value = shift.employee_id;
     }
     document.getElementById('shift-title').value = shift.title || '';
-    document.getElementById('shift-date').value = shift.shift_date;
+    setShiftDateValue(shift.shift_date);
     document.getElementById('shift-start').value = shift.start_time?.slice(0, 5) || '';
     document.getElementById('shift-end').value = shift.end_time?.slice(0, 5) || '';
     document.getElementById('shift-status').value = shift.status;
@@ -1046,7 +1048,7 @@ function openShiftModal(shiftId) {
 
 function openShiftModalPrefilled(dateStr, employeeId) {
   openShiftModal(null);
-  document.getElementById('shift-date').value = dateStr;
+  setShiftDateValue(dateStr);
   if (employeeId) {
     document.getElementById('shift-employee').value = employeeId;
   }
@@ -1070,7 +1072,7 @@ async function handleShiftSave() {
       ? document.getElementById('shift-employee').value
       : currentUser.id,
     title: document.getElementById('shift-title').value.trim(),
-    shift_date: document.getElementById('shift-date').value,
+    shift_date: getShiftDateValue(),
     start_time: document.getElementById('shift-start').value,
     end_time: document.getElementById('shift-end').value,
     notes: document.getElementById('shift-notes').value.trim() || null,
@@ -1113,6 +1115,36 @@ async function handleShiftSave() {
   } else {
     await loadMonth();
   }
+}
+
+function initShiftDatePicker() {
+  const dateInput = document.getElementById('shift-date');
+  if (!dateInput || typeof window.flatpickr !== 'function') return;
+
+  shiftDatePicker = window.flatpickr(dateInput, {
+    dateFormat: 'Y-m-d',
+    locale: {
+      firstDayOfWeek: 1,
+    },
+    onChange: () => {
+      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+  });
+}
+
+function setShiftDateValue(dateStr) {
+  if (shiftDatePicker) {
+    shiftDatePicker.setDate(dateStr, false, 'Y-m-d');
+    return;
+  }
+  document.getElementById('shift-date').value = dateStr;
+}
+
+function getShiftDateValue() {
+  if (shiftDatePicker) {
+    return shiftDatePicker.input.value;
+  }
+  return document.getElementById('shift-date').value;
 }
 
 // ── Modal: Delete confirm ────────────────────────────────────────────────────
