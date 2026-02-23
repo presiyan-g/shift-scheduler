@@ -168,6 +168,9 @@
               <div class="invalid-feedback">Please enter a shift title.</div>
             </div>
 
+            <!-- Template suggestions (shown on focus, filtered on input) -->
+            <div id="template-suggestions" class="template-suggestions-wrap d-none"></div>
+
             <!-- Date mode toggle (hidden in edit mode) -->
             <div class="mb-2" id="date-mode-toggle-wrap">
               <div class="btn-group btn-group-sm w-100" role="group" aria-label="Date selection mode">
@@ -230,6 +233,26 @@
                 maxlength="500"
                 placeholder="Any additional details..."
               ></textarea>
+            </div>
+
+            <!-- Color (optional) -->
+            <div class="mb-3">
+              <label for="shift-color" class="form-label fw-medium">
+                Color <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <div class="d-flex align-items-center gap-2">
+                <input
+                  type="color"
+                  class="form-control form-control-color shift-color-input"
+                  id="shift-color"
+                  value="#4a90d9"
+                  title="Shift color"
+                />
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="shift-color-clear">
+                  <i class="bi bi-x-lg me-1"></i>No color
+                </button>
+                <span class="text-muted small" id="shift-color-status">No color</span>
+              </div>
             </div>
 
           </form>

@@ -28,6 +28,10 @@ let employeeExistingShiftDates = new Set(); // dates the selected employee alrea
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 let myShiftsOnly = false;  // toggle: true = current user's shifts only
 
+// Template suggestions state
+let shiftTemplates = [];        // cached after first load
+let shiftColorEnabled = false;  // true = color field has a value to save
+
 // Monthly view state
 let currentView = 'week';       // 'week' | 'month'
 let currentMonthDate = null;    // Date object — 1st of the displayed month
@@ -324,6 +328,46 @@ function attachEventListeners() {
         openShiftModalPrefilled(cell.dataset.date, cell.dataset.employee);
       }
     }
+  });
+
+  // Template suggestions — title field
+  const titleInput    = document.getElementById('shift-title');
+  const suggestionsEl = document.getElementById('template-suggestions');
+
+  titleInput.addEventListener('focus', async () => {
+    await loadShiftTemplates();
+    renderTemplateSuggestions(titleInput.value);
+  });
+
+  titleInput.addEventListener('input', () => {
+    renderTemplateSuggestions(titleInput.value);
+  });
+
+  // Prevent blur from firing before the chip click registers
+  suggestionsEl.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+
+  suggestionsEl.addEventListener('click', (e) => {
+    const chip = e.target.closest('.template-chip');
+    if (chip) applyTemplateChip(chip);
+  });
+
+  titleInput.addEventListener('blur', () => {
+    hideTemplateSuggestions();
+  });
+
+  // Shift color field
+  document.getElementById('shift-color').addEventListener('input', () => {
+    shiftColorEnabled = true;
+    document.getElementById('shift-color-status').textContent = 'Color set';
+    document.getElementById('shift-color-clear').classList.remove('d-none');
+  });
+
+  document.getElementById('shift-color-clear').addEventListener('click', () => {
+    shiftColorEnabled = false;
+    document.getElementById('shift-color-status').textContent = 'No color';
+    document.getElementById('shift-color-clear').classList.add('d-none');
   });
 }
 
@@ -685,8 +729,12 @@ function buildShiftCardHtml(shift) {
   }
   // else: teammate's shift → no action buttons (read-only)
 
+  const colorStyle = shift.color
+    ? `style="border-left: 3px solid ${escapeHtml(shift.color)} !important;"`
+    : '';
+
   return `
-    <div class="shift-card p-2 rounded border ${statusClass}">
+    <div class="shift-card p-2 rounded border ${statusClass}" ${colorStyle}>
       <div class="d-flex align-items-start justify-content-between gap-1">
         <span class="fw-semibold text-truncate">${escapeHtml(shift.title || 'Shift')}</span>
         <span class="badge ${badgeClass} rounded-pill text-nowrap">${shift.status}</span>
@@ -799,8 +847,12 @@ function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
           cancelled: 'danger',
         }[s.status] || 'secondary';
 
+        const pillColorStyle = s.color
+          ? `style="border-left: 3px solid ${escapeHtml(s.color)}; background-color: ${escapeHtml(s.color)}22 !important;"`
+          : '';
         cellHtml += `<div class="matrix-shift-pill badge bg-${statusColor}-subtle text-${statusColor}"
           data-shift-id="${s.id}"
+          ${pillColorStyle}
           title="${escapeHtml(s.title)}: ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}">
           ${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}
         </div>`;
@@ -910,12 +962,17 @@ function renderMyMonthCalendar(shifts, leaves = []) {
         ? '<i class="bi bi-hourglass-split"></i>'
         : '';
 
+      const calPillColorStyle = shift.color
+        ? `style="border-left: 3px solid ${escapeHtml(shift.color)}; background-color: ${escapeHtml(shift.color)}22 !important;"`
+        : '';
+
       entriesHtml += `
         <div
           class="month-cal-shift bg-${statusTone}-subtle text-${statusTone}${isClickable ? ' month-cal-shift-clickable' : ''}"
           data-shift-id="${shift.id}"
           data-team-id="${shift.team_id || ''}"
           title="${escapeHtml(shift.title || 'Shift')}: ${formatTime(shift.start_time)}–${formatTime(shift.end_time)}"
+          ${calPillColorStyle}
         >
           <span class="month-cal-shift-time">${formatTimeShort(shift.start_time)}-${formatTimeShort(shift.end_time)}</span>
           <span class="month-cal-shift-title">${escapeHtml(shift.title || 'Shift')}</span>
@@ -944,6 +1001,82 @@ function renderMyMonthCalendar(shifts, leaves = []) {
   html += '</div></div>';
 
   container.innerHTML = html;
+}
+
+// ── Shift template suggestions ───────────────────────────────────────────────
+
+async function loadShiftTemplates() {
+  if (shiftTemplates.length > 0) return; // cached — skip reload
+  const { data, error } = await supabase
+    .from('shift_templates')
+    .select('id, title, start_time, end_time, notes, color')
+    .order('title', { ascending: true });
+  if (error) {
+    console.error('Templates fetch error:', error);
+    return;
+  }
+  shiftTemplates = data || [];
+}
+
+function renderTemplateSuggestions(filterText = '') {
+  const container = document.getElementById('template-suggestions');
+  if (!container) return;
+
+  const lower    = filterText.toLowerCase().trim();
+  const filtered = lower
+    ? shiftTemplates.filter((t) => t.title.toLowerCase().includes(lower))
+    : shiftTemplates;
+
+  if (filtered.length === 0) {
+    container.classList.add('d-none');
+    return;
+  }
+
+  container.innerHTML = filtered
+    .map((t) => {
+      const dotHtml = t.color
+        ? `<span class="template-chip-dot" style="background-color:${escapeHtml(t.color)}"></span>`
+        : '';
+      return `<button
+        type="button"
+        class="template-chip"
+        data-id="${escapeHtml(t.id)}"
+        data-title="${escapeHtml(t.title)}"
+        data-start="${escapeHtml(t.start_time?.slice(0, 5) || '')}"
+        data-end="${escapeHtml(t.end_time?.slice(0, 5) || '')}"
+        data-notes="${escapeHtml(t.notes || '')}"
+        data-color="${escapeHtml(t.color || '')}"
+      >${dotHtml}${escapeHtml(t.title)}</button>`;
+    })
+    .join('');
+
+  container.classList.remove('d-none');
+}
+
+function applyTemplateChip(chip) {
+  document.getElementById('shift-title').value = chip.dataset.title;
+  document.getElementById('shift-start').value = chip.dataset.start;
+  document.getElementById('shift-end').value   = chip.dataset.end;
+  document.getElementById('shift-notes').value = chip.dataset.notes;
+
+  const color = chip.dataset.color;
+  if (color) {
+    shiftColorEnabled = true;
+    document.getElementById('shift-color').value              = color;
+    document.getElementById('shift-color-status').textContent = 'Color set';
+    document.getElementById('shift-color-clear').classList.remove('d-none');
+  } else {
+    shiftColorEnabled = false;
+    document.getElementById('shift-color-status').textContent = 'No color';
+    document.getElementById('shift-color-clear').classList.add('d-none');
+  }
+
+  hideTemplateSuggestions();
+}
+
+function hideTemplateSuggestions() {
+  const container = document.getElementById('template-suggestions');
+  if (container) container.classList.add('d-none');
 }
 
 // ── Debounce helper ──────────────────────────────────────────────────────────
@@ -1100,6 +1233,11 @@ function openShiftModal(shiftId) {
     saveLabelEl.textContent = 'Save Shift';
     // Pre-fill date with today's date
     setShiftDateValue(toDateString(new Date()));
+    // Reset color field
+    shiftColorEnabled = false;
+    document.getElementById('shift-color-status').textContent = 'No color';
+    document.getElementById('shift-color-clear').classList.add('d-none');
+    hideTemplateSuggestions();
   } else {
     // Edit mode — hide toggle, force single picker
     document.getElementById('date-mode-toggle-wrap').classList.add('d-none');
@@ -1125,6 +1263,18 @@ function openShiftModal(shiftId) {
     document.getElementById('shift-end').value = shift.end_time?.slice(0, 5) || '';
     document.getElementById('shift-status').value = shift.status;
     document.getElementById('shift-notes').value = shift.notes || '';
+    // Restore color field
+    if (shift.color) {
+      shiftColorEnabled = true;
+      document.getElementById('shift-color').value              = shift.color;
+      document.getElementById('shift-color-status').textContent = 'Color set';
+      document.getElementById('shift-color-clear').classList.remove('d-none');
+    } else {
+      shiftColorEnabled = false;
+      document.getElementById('shift-color-status').textContent = 'No color';
+      document.getElementById('shift-color-clear').classList.add('d-none');
+    }
+    hideTemplateSuggestions();
   }
 
   // Clear any stale warnings
@@ -1180,6 +1330,7 @@ async function handleShiftSave() {
     team_id:    isManager
       ? document.getElementById('shift-team').value || null
       : null,
+    color:      shiftColorEnabled ? document.getElementById('shift-color').value : null,
   };
 
   if (isEdit) {

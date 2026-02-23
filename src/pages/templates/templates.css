@@ -1,0 +1,28 @@
+/* ── Template cards ── */
+
+.template-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Color dot on template cards */
+.template-color-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+/* Color picker in the modal */
+.template-color-input {
+  width: 2.5rem;
+  height: 2.25rem;
+  padding: 0.2rem;
+  cursor: pointer;
+}

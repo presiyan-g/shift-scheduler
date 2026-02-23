@@ -36,6 +36,11 @@ export function renderNavbar({
     navLinks.push({ key: 'teams', label: 'Teams', href: '/teams', icon: 'bi-people' });
   }
 
+  // Templates link visible to admins and team managers
+  if (role === 'admin' || isTeamManager) {
+    navLinks.push({ key: 'templates', label: 'Templates', href: '/templates', icon: 'bi-layout-text-sidebar-reverse' });
+  }
+
   const linksHtml = navLinks
     .map(
       (link) =>
