@@ -8,6 +8,9 @@
 /teams              /src/pages/teams/teams.html           200
 /profile            /src/pages/profile/profile.html       200
 /account            /src/pages/account/account.html       200
+/transfers          /src/pages/transfers/transfers.html   200
+/leave              /src/pages/leave/leave.html           200
+/templates          /src/pages/templates/templates.html   200
 
 # Legacy URL redirects
 /index.html         /                                      301
@@ -18,3 +21,6 @@
 /teams.html         /teams                                 301
 /profile.html       /profile                               301
 /account.html       /account                               301
+/transfers.html     /transfers                             301
+/leave.html         /leave                                 301
+/templates.html     /templates                             301

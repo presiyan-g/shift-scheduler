@@ -51,3 +51,8 @@
   from = "/leave"
   to = "/src/pages/leave/leave.html"
   status = 200
+
+[[redirects]]
+  from = "/templates"
+  to = "/src/pages/templates/templates.html"
+  status = 200
