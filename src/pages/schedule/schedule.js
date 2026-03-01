@@ -53,7 +53,7 @@ async function init() {
 
   userRole = profile.role;
   currentUserFullName = profile.full_name || 'You';
-  isAdmin = userRole === 'admin';
+  isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   // Fetch managed teams early to determine manager status
   if (isAdmin) {

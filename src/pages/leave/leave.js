@@ -39,7 +39,7 @@ async function init() {
     return;
   }
 
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = profile.role === 'admin' || profile.role === 'super_admin';
 
   let managedTeams = [];
   if (isAdmin) {

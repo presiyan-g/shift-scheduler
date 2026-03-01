@@ -7,7 +7,7 @@ import { clearSessionCache } from '@shared/auth.js';
  *
  * @param {object} options
  * @param {string} [options.activePage] - Current page key to highlight in nav (e.g. 'dashboard', 'schedule')
- * @param {string} [options.role] - User role ('admin' | 'employee') — controls which links are shown
+ * @param {string} [options.role] - User role ('super_admin' | 'admin' | 'employee') — controls which links are shown
  * @param {boolean} [options.isTeamManager] - Whether the user manages at least one team
  * @param {string} [options.userName] - Display name for the avatar menu
  * @param {string|null} [options.avatarUrl] - URL to the user's avatar image
@@ -24,6 +24,8 @@ export function renderNavbar({
     existingNavbar.remove();
   }
 
+  const isAdminRole = role === 'admin' || role === 'super_admin';
+
   const navLinks = [
     { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'bi-speedometer2' },
     { key: 'schedule', label: 'Schedule', href: '/schedule', icon: 'bi-calendar3' },
@@ -32,13 +34,18 @@ export function renderNavbar({
   ];
 
   // Teams link visible to admins and team managers
-  if (role === 'admin' || isTeamManager) {
+  if (isAdminRole || isTeamManager) {
     navLinks.push({ key: 'teams', label: 'Teams', href: '/teams', icon: 'bi-people' });
   }
 
   // Templates link visible to admins and team managers
-  if (role === 'admin' || isTeamManager) {
+  if (isAdminRole || isTeamManager) {
     navLinks.push({ key: 'templates', label: 'Templates', href: '/templates', icon: 'bi-layout-text-sidebar-reverse' });
+  }
+
+  // Admin link visible to admins and super admins only
+  if (isAdminRole) {
+    navLinks.push({ key: 'admin', label: 'Admin', href: '/admin', icon: 'bi-shield-lock' });
   }
 
   const linksHtml = navLinks

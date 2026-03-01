@@ -37,7 +37,7 @@ async function init() {
   }
 
   userRole = profile.role;
-  isAdmin = userRole === 'admin';
+  isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   // Only admins and team managers should be on this page
   let isTeamManager = false;
@@ -253,6 +253,7 @@ function renderMembersTable() {
           : '<span class="badge bg-secondary">Member</span>';
 
       const appRoleBadge = {
+        super_admin: '<span class="badge bg-warning-subtle text-warning">Super Admin</span>',
         admin: '<span class="badge bg-danger-subtle text-danger">Admin</span>',
         employee: '<span class="badge bg-success-subtle text-success">Employee</span>',
       }[profile?.role] || '';
@@ -420,9 +421,11 @@ function renderMemberPickerList(profiles) {
   }
 
   list.innerHTML = profiles.map((p) => {
-    const appBadge = p.role === 'admin'
-      ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>'
-      : '';
+    const appBadge = p.role === 'super_admin'
+      ? '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Super Admin</span>'
+      : p.role === 'admin'
+        ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>'
+        : '';
     const teamBadges = (p.other_teams || [])
       .map((t) => `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">${escapeHtml(t)}</span>`)
       .join('');

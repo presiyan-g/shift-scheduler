@@ -30,7 +30,7 @@ async function init() {
   }
 
   userRole = profile.role;
-  isAdmin = userRole === 'admin';
+  isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   // Only admins and team managers may access this page
   let isTeamManager = false;

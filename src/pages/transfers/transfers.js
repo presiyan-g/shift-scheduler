@@ -34,7 +34,7 @@ async function init() {
     return;
   }
 
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = profile.role === 'admin' || profile.role === 'super_admin';
 
   if (isAdmin) {
     managedTeams = (await getAllTeams()).map((t) => ({ team: t }));

@@ -74,8 +74,8 @@ function renderProfileHeader(profile) {
   document.getElementById('profile-name-display').textContent =
     profile.full_name || 'Unnamed User';
 
-  const roleColors = { admin: 'danger', employee: 'primary' };
-  const roleLabels = { admin: 'Admin', employee: 'Employee' };
+  const roleColors = { super_admin: 'warning', admin: 'danger', employee: 'primary' };
+  const roleLabels = { super_admin: 'Super Admin', admin: 'Admin', employee: 'Employee' };
   const badgeColor = roleColors[profile.role] ?? 'secondary';
   const badgeLabel = roleLabels[profile.role] ?? profile.role;
 

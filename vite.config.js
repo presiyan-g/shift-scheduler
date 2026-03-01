@@ -18,6 +18,7 @@ const pageRewrites = {
   '/transfers': '/src/pages/transfers/transfers.html',
   '/leave':     '/src/pages/leave/leave.html',
   '/templates': '/src/pages/templates/templates.html',
+  '/admin':     '/src/pages/admin/admin.html',
 };
 
 // Redirect legacy .html routes to clean paths so URLs stay extensionless.
@@ -33,6 +34,7 @@ const legacyPathRedirects = {
   '/transfers.html': '/transfers',
   '/leave.html':     '/leave',
   '/templates.html': '/templates',
+  '/admin.html':     '/admin',
 };
 
 const rewritePlugin = {
@@ -83,6 +85,7 @@ export default defineConfig({
         transfers: resolve(__dirname, 'src/pages/transfers/transfers.html'),
         leave:     resolve(__dirname, 'src/pages/leave/leave.html'),
         templates: resolve(__dirname, 'src/pages/templates/templates.html'),
+        admin:     resolve(__dirname, 'src/pages/admin/admin.html'),
       },
     },
   },

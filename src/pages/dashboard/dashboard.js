@@ -28,7 +28,7 @@ async function init() {
   // Fetch managed teams early to determine manager status
   const managedTeams = await getManagedTeams(user.id);
   const isTeamManager = managedTeams.length > 0;
-  const isManager = profile.role === 'admin' || isTeamManager;
+  const isManager = profile.role === 'admin' || profile.role === 'super_admin' || isTeamManager;
 
   renderNavbar({ activePage: 'dashboard', role: profile.role, isTeamManager, userName: profile.full_name, avatarUrl: profile.avatar_url });
 
@@ -178,7 +178,7 @@ async function init() {
   // 9. Manager banner
   if (isManager) {
     document.getElementById('manager-banner').classList.remove('d-none');
-    const teamLabel = profile.role === 'admin'
+    const teamLabel = profile.role === 'admin' || profile.role === 'super_admin'
       ? 'all teams'
       : `${managedTeams.length} team(s)`;
     document.getElementById('manager-team-summary').textContent =
