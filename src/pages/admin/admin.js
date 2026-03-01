@@ -150,9 +150,11 @@ function renderUsersTable() {
 
     const teamsHtml = (user.teams || []).length > 0
       ? user.teams.map((t) =>
-          `<span class="badge bg-secondary-subtle text-secondary me-1 mb-1">${escapeHtml(t.team_name)}${
+          `<span class="badge bg-secondary-subtle text-secondary me-1 mb-1"${
+            t.team_role === 'manager' ? ' title="Team Manager"' : ''
+          }>${escapeHtml(t.team_name)}${
             t.team_role === 'manager'
-              ? ' <i class="bi bi-star-fill text-warning" style="font-size:0.6rem"></i>'
+              ? ' <i class="bi bi-star-fill text-warning" style="font-size:0.6rem" title="Team Manager"></i>'
               : ''
           }</span>`
         ).join('')
