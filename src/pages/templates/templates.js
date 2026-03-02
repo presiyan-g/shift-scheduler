@@ -3,6 +3,7 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
+import { escapeHtml, formatTime } from '@shared/formatting.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -286,23 +287,6 @@ async function handleDeleteConfirm() {
   pendingDeleteId = null;
   showToast('Template deleted.', 'success');
   await loadTemplates();
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatTime(timeStr) {
-  if (!timeStr) return '—';
-  const [h, m] = timeStr.split(':');
-  const hour   = parseInt(h, 10);
-  const ampm   = hour >= 12 ? 'PM' : 'AM';
-  const h12    = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────

@@ -1,14 +1,6 @@
-/* ── Large avatar on profile page ── */
+/* ── Profile avatar overrides (extends shared .avatar) ── */
 
-.profile-avatar-large {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  background-color: var(--bs-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+#avatar-container.avatar {
   cursor: pointer;
   position: relative;
   border: 3px solid #fff;
@@ -16,22 +8,8 @@
   transition: opacity 0.2s ease;
 }
 
-.profile-avatar-large:hover {
+#avatar-container.avatar:hover {
   opacity: 0.85;
-}
-
-.profile-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.profile-avatar-initials {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #fff;
-  text-transform: uppercase;
 }
 
 .profile-avatar-overlay {

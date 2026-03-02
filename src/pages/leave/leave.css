@@ -24,21 +24,6 @@
   text-align: center;
 }
 
-/* Employee avatar initials badge */
-.avatar-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: var(--bs-primary);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
 /* Conflict rows in review modal */
 .conflict-row {
   display: grid;

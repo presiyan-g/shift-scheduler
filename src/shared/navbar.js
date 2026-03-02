@@ -1,5 +1,7 @@
 import { supabase } from '@shared/supabase.js';
 import { clearSessionCache } from '@shared/auth.js';
+import { escapeHtml } from '@shared/formatting.js';
+import { buildAvatarHtml } from '@shared/avatar.js';
 
 /**
  * Renders the shared navbar into a container element.
@@ -59,7 +61,7 @@ export function renderNavbar({
     )
     .join('');
 
-  const avatarHtml = buildAvatarHtml(userName, avatarUrl);
+  const avatarInnerHtml = buildAvatarHtml(userName, avatarUrl);
   const displayName = escapeHtml(userName) || 'Account';
   const mobileUserMenuHtml = `
     <li class="nav-item d-lg-none user-inline-item">
@@ -72,7 +74,7 @@ export function renderNavbar({
         aria-expanded="false"
         aria-controls="mobile-user-menu"
       >
-        <span class="navbar-avatar-bubble">${avatarHtml}</span>
+        <span class="avatar avatar-sm avatar-navbar">${avatarInnerHtml}</span>
         <span class="fw-medium">${displayName}</span>
         <i class="bi bi-chevron-down small ms-auto"></i>
       </button>
@@ -124,8 +126,8 @@ export function renderNavbar({
             data-bs-toggle="dropdown"
             aria-expanded="false"
           >
-            <span class="navbar-avatar-bubble">
-              ${avatarHtml}
+            <span class="avatar avatar-sm avatar-navbar">
+              ${avatarInnerHtml}
             </span>
             <span class="d-none d-md-inline fw-medium small">${displayName}</span>
             <i class="bi bi-chevron-down small"></i>
@@ -165,34 +167,3 @@ export function renderNavbar({
   document.getElementById('logout-btn-mobile')?.addEventListener('click', handleLogout);
 }
 
-// ── Internal helpers ────────────────────────────────────────────────────────
-
-function buildAvatarHtml(userName, avatarUrl) {
-  if (avatarUrl) {
-    return `<img
-      src="${escapeHtml(avatarUrl)}"
-      alt="Avatar"
-      class="navbar-avatar-img"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-    /><span class="navbar-avatar-initials" style="display:none">${getInitials(userName)}</span>`;
-  }
-  if (userName) {
-    return `<span class="navbar-avatar-initials">${getInitials(userName)}</span>`;
-  }
-  return `<i class="bi bi-person-fill"></i>`;
-}
-
-function getInitials(name) {
-  return (name ?? '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str ?? '';
-  return d.innerHTML;
-}

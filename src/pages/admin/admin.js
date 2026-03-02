@@ -3,6 +3,8 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
+import { escapeHtml } from '@shared/formatting.js';
+import { buildAvatarHtml } from '@shared/avatar.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -205,8 +207,8 @@ function renderUsersTable() {
       <tr class="${!user.is_active ? 'table-light' : ''}">
         <td class="ps-3">
           <div class="d-flex align-items-center gap-2">
-            <div class="admin-avatar-sm">
-              ${buildAvatarSmall(user.avatar_url, user.full_name)}
+            <div class="avatar avatar-sm">
+              ${buildAvatarHtml(user.full_name, user.avatar_url)}
             </div>
             <span class="fw-medium ${!user.is_active ? 'text-muted' : ''}">${escapeHtml(user.full_name || 'Unnamed')}</span>
           </div>
@@ -364,35 +366,6 @@ async function handleRoleConfirm() {
   pendingRoleUserId   = null;
   pendingRoleNewRole  = null;
   pendingRoleUserName = '';
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
-}
-
-function buildAvatarSmall(avatarUrl, name) {
-  if (avatarUrl) {
-    return `<img src="${escapeHtml(avatarUrl)}" alt="" class="admin-avatar-img"
-              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
-            <span class="admin-avatar-initials" style="display:none">${getInitials(name)}</span>`;
-  }
-  if (name) {
-    return `<span class="admin-avatar-initials">${getInitials(name)}</span>`;
-  }
-  return `<i class="bi bi-person-fill text-muted"></i>`;
-}
-
-function getInitials(name) {
-  return (name ?? '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 // ── Start ───────────────────────────────────────────────────────────────────

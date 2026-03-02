@@ -3,6 +3,8 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams, getAllTeams } from '@shared/teams.js';
+import { escapeHtml, formatTime, toDateString, formatDateFull } from '@shared/formatting.js';
+import { buildAvatarHtml } from '@shared/avatar.js';
 import {
   createLeaveRequest,
   getMyLeaveRequests,
@@ -155,7 +157,7 @@ function buildRequestCard(request, context) {
   const statusCfg = STATUS_CONFIG[request.status] || STATUS_CONFIG.cancelled;
   const typeLabel = LEAVE_TYPE_LABELS[request.leave_type] || request.leave_type;
 
-  const dateRange = `${formatDate(request.start_date)} – ${formatDate(request.end_date)}`;
+  const dateRange = `${formatDateFull(request.start_date)} – ${formatDateFull(request.end_date)}`;
 
   let notes = '';
   if (request.employee_note) {
@@ -206,10 +208,9 @@ function buildRequestCard(request, context) {
   // Manager view: show employee name/avatar
   let employeeInfo = '';
   if (context === 'manager') {
-    const initials = getInitials(employee.full_name || '?');
     employeeInfo = `
       <div class="d-flex align-items-center gap-2 mb-2">
-        <span class="avatar-badge">${initials}</span>
+        <span class="avatar avatar-sm">${buildAvatarHtml(employee.full_name, null)}</span>
         <strong>${escapeHtml(employee.full_name || 'Unknown')}</strong>
       </div>
     `;
@@ -325,14 +326,14 @@ async function openReviewModal(requestId) {
   if (request) {
     const employee = request.employee || {};
     const typeLabel = LEAVE_TYPE_LABELS[request.leave_type] || request.leave_type;
-    const dateRange = `${formatDate(request.start_date)} – ${formatDate(request.end_date)}`;
+    const dateRange = `${formatDateFull(request.start_date)} – ${formatDateFull(request.end_date)}`;
     const noteHtml  = request.employee_note
       ? `<div class="mt-1 text-muted small"><i class="bi bi-chat-left-text me-1"></i>${escapeHtml(request.employee_note)}</div>`
       : '';
 
     document.getElementById('review-request-summary').innerHTML = `
       <div class="d-flex align-items-center gap-2 mb-1">
-        <span class="avatar-badge">${getInitials(employee.full_name || '?')}</span>
+        <span class="avatar avatar-sm">${buildAvatarHtml(employee.full_name, null)}</span>
         <strong>${escapeHtml(employee.full_name || 'Unknown')}</strong>
       </div>
       <div>
@@ -411,7 +412,7 @@ async function renderConflicts(conflicts, employeeId) {
           ${c.team_name ? `<span class="text-muted small ms-1">(${escapeHtml(c.team_name)})</span>` : ''}
         </div>
         <div class="text-muted small conflict-date">
-          <i class="bi bi-calendar3 me-1"></i>${formatDate(c.shift_date)}
+          <i class="bi bi-calendar3 me-1"></i>${formatDateFull(c.shift_date)}
         </div>
         <div class="text-muted small conflict-time">
           <i class="bi bi-clock me-1"></i>${formatTime(c.start_time)} – ${formatTime(c.end_time)}
@@ -527,7 +528,7 @@ function openCancelApprovedModal(requestId) {
 
   const typeLabel = LEAVE_TYPE_LABELS[request.leave_type] || request.leave_type;
   const employeeName = request.employee?.full_name || 'this employee';
-  const dateRange = `${formatDate(request.start_date)} – ${formatDate(request.end_date)}`;
+  const dateRange = `${formatDateFull(request.start_date)} – ${formatDateFull(request.end_date)}`;
 
   document.getElementById('cancel-approved-id').value = requestId;
   document.getElementById('cancel-approved-note').value = '';
@@ -571,46 +572,6 @@ async function handleCancel(requestId) {
 
   showToast('Leave request cancelled.', 'success');
   await loadAllData();
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  const [y, m, d] = dateStr.split('-');
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return '—';
-  const [h, m] = timeStr.split(':');
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
-}
-
-function toDateString(date) {
-  const y = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const d  = String(date.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${d}`;
-}
-
-function getInitials(name) {
-  return (name || '?')
-    .split(' ')
-    .map((w) => w[0] || '')
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { showToast } from '@shared/toast.js';
 import { getAllTeams, getManagedTeams, getTeamEmployees } from '@shared/teams.js';
 import { createTransferRequest, getTransferTargets } from '@shared/transfers.js';
 import { completeExpiredShifts } from '@shared/shifts.js';
+import { escapeHtml, formatTime, formatTimeShort, toDateString } from '@shared/formatting.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -1664,13 +1665,6 @@ function getWeekDays(weekStart) {
   });
 }
 
-function toDateString(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 function formatWeekLabel(weekStart) {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -1694,30 +1688,6 @@ function getDaysInMonth(date) {
 
 function formatMonthLabel(date) {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
-
-function formatTimeShort(timeStr) {
-  if (!timeStr) return '';
-  const [h] = timeStr.split(':');
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? 'p' : 'a';
-  const h12 = hour % 12 || 12;
-  return `${h12}${ampm}`;
-}
-
-function formatTime(timeStr) {
-  if (!timeStr) return '—';
-  const [h, m] = timeStr.split(':');
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────

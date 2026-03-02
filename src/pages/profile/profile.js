@@ -3,6 +3,8 @@ import { renderNavbar } from '@shared/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
+import { escapeHtml } from '@shared/formatting.js';
+import { buildAvatarHtml } from '@shared/avatar.js';
 
 const MAX_FILE_SIZE_MB = 2;
 
@@ -85,32 +87,7 @@ function renderProfileHeader(profile) {
 
 function renderAvatarLarge(avatarUrl, name) {
   const container = document.getElementById('avatar-container');
-  if (avatarUrl) {
-    container.innerHTML = `
-      <img src="${escapeHtml(avatarUrl)}" alt="Avatar" class="profile-avatar-img"
-        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
-      <span class="profile-avatar-initials" style="display:none">${getInitials(name)}</span>
-    `;
-  } else if (name) {
-    container.innerHTML = `<span class="profile-avatar-initials">${getInitials(name)}</span>`;
-  } else {
-    container.innerHTML = `<i class="bi bi-person-fill fs-1 text-white"></i>`;
-  }
-}
-
-function getInitials(name) {
-  return (name ?? '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str ?? '';
-  return d.innerHTML;
+  container.innerHTML = buildAvatarHtml(name, avatarUrl);
 }
 
 // ── Name save ───────────────────────────────────────────────────────────────

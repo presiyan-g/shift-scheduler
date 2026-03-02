@@ -5,6 +5,7 @@ import { showToast } from '@shared/toast.js';
 import { getManagedTeams } from '@shared/teams.js';
 import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/transfers.js';
 import { completeExpiredShifts } from '@shared/shifts.js';
+import { escapeHtml, formatTime, toDateString, formatDateShort } from '@shared/formatting.js';
 
 let currentUser = null;
 let transferModalInstance = null;
@@ -288,13 +289,6 @@ async function loadLeaveWidget(userId, isManager) {
 
 // ── Date helpers ──
 
-function toDateString(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 function getDateOffset(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -338,25 +332,6 @@ function calcTotalHours(shifts) {
     if (hours < 0) hours += 24; // overnight shift
     return sum + hours;
   }, 0);
-}
-
-function formatTime(timeStr) {
-  const [h, m] = timeStr.split(':');
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
-}
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 // ── Transfer helpers ──
@@ -480,9 +455,9 @@ function renderUpcomingShifts(shifts, isManager) {
       <div class="d-flex align-items-center px-3 py-3 border-bottom shift-row">
         <div class="me-3 text-center" style="min-width: 50px;">
           <div class="fw-bold text-primary" style="font-size: 0.85rem;">
-            ${formatDate(shift.shift_date).split(', ')[0] || ''}
+            ${formatDateShort(shift.shift_date).split(', ')[0] || ''}
           </div>
-          <small class="text-muted">${formatDate(shift.shift_date).split(', ')[1] || formatDate(shift.shift_date)}</small>
+          <small class="text-muted">${formatDateShort(shift.shift_date).split(', ')[1] || formatDateShort(shift.shift_date)}</small>
         </div>
         <div class="flex-grow-1">
           <div class="fw-semibold">${escapeHtml(shift.title || 'Shift')}</div>
@@ -522,7 +497,7 @@ function renderRecentShifts(shifts, isManager) {
           <span class="badge bg-${statusColor}-subtle text-${statusColor} rounded-pill" style="font-size: 0.7rem;">${shift.status}</span>
         </div>
         <small class="text-muted">
-          ${formatDate(shift.shift_date)} &middot; ${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
+          ${formatDateShort(shift.shift_date)} &middot; ${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
         </small>
         ${isManager ? `<br><small class="text-muted"><i class="bi bi-person"></i> ${escapeHtml(shift.employee?.full_name || '')}</small>` : ''}
       </div>
