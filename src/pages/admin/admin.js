@@ -14,6 +14,10 @@ let pendingToggleUserId = null;
 let pendingToggleStatus = null;
 let pendingToggleUserName = '';
 let toggleModalInstance = null;
+let pendingRoleUserId   = null;
+let pendingRoleNewRole  = null;
+let pendingRoleUserName = '';
+let roleModalInstance   = null;
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -50,6 +54,7 @@ async function init() {
   });
 
   toggleModalInstance = new bootstrap.Modal(document.getElementById('toggle-modal'));
+  roleModalInstance   = new bootstrap.Modal(document.getElementById('role-modal'));
 
   attachEventListeners();
   await loadUsers();
@@ -62,6 +67,7 @@ function attachEventListeners() {
   document.getElementById('role-filter').addEventListener('change', applyFilters);
   document.getElementById('status-filter').addEventListener('change', applyFilters);
   document.getElementById('confirm-toggle-btn').addEventListener('click', handleToggleConfirm);
+  document.getElementById('confirm-role-btn').addEventListener('click', handleRoleConfirm);
 
   // Delegated click on the users table body
   document.getElementById('users-tbody').addEventListener('click', (e) => {
@@ -70,6 +76,13 @@ function attachEventListeners() {
       const userId = toggleBtn.dataset.userId;
       const user = allUsers.find((u) => u.id === userId);
       if (user) openToggleModal(user);
+    }
+
+    const roleBtn = e.target.closest('.change-role-btn');
+    if (roleBtn) {
+      const userId = roleBtn.dataset.userId;
+      const user = allUsers.find((u) => u.id === userId);
+      if (user) openRoleModal(user);
     }
   });
 }
@@ -164,17 +177,29 @@ function renderUsersTable() {
       ? '<span class="badge bg-success-subtle text-success">Active</span>'
       : '<span class="badge bg-danger-subtle text-danger">Inactive</span>';
 
-    // Determine if toggle button should be shown
-    const canToggle = canToggleUser(user);
+    const canToggle   = canToggleUser(user);
+    const canRole     = canChangeRole(user);
+    const isPromoting = user.role === 'employee';
 
-    const actionHtml = canToggle
+    const toggleBtnHtml = canToggle
       ? `<button class="btn btn-sm ${user.is_active ? 'btn-outline-danger' : 'btn-outline-success'} toggle-active-btn"
                  data-user-id="${user.id}" type="button">
            <i class="bi ${user.is_active ? 'bi-person-x' : 'bi-person-check'} me-1"></i>${user.is_active ? 'Deactivate' : 'Activate'}
          </button>`
-      : (user.id === currentUser.id
-          ? '<span class="text-muted small fst-italic">You</span>'
-          : '');
+      : '';
+
+    const roleBtnHtml = canRole
+      ? `<button class="btn btn-sm ${isPromoting ? 'btn-outline-primary' : 'btn-outline-warning'} change-role-btn ms-1"
+                 data-user-id="${user.id}" type="button">
+           <i class="bi ${isPromoting ? 'bi-shield-plus' : 'bi-shield-minus'} me-1"></i>${isPromoting ? 'Make Admin' : 'Demote'}
+         </button>`
+      : '';
+
+    const selfLabel = (!canToggle && !canRole && user.id === currentUser.id)
+      ? '<span class="text-muted small fst-italic">You</span>'
+      : '';
+
+    const actionHtml = toggleBtnHtml + roleBtnHtml + selfLabel;
 
     return `
       <tr class="${!user.is_active ? 'table-light' : ''}">
@@ -212,6 +237,24 @@ function canToggleUser(user) {
 
   // Super admin can toggle anyone (except themselves and super_admins — handled above)
   // Admin can toggle employees
+  return true;
+}
+
+// ── Role change authorization (client-side mirror of DB rules) ──────────────
+
+function canChangeRole(user) {
+  // Only super_admins can change roles
+  if (currentUserRole !== 'super_admin') return false;
+
+  // Cannot change your own role
+  if (user.id === currentUser.id) return false;
+
+  // Cannot change another super_admin's role
+  if (user.role === 'super_admin') return false;
+
+  // Only admin and employee are valid targets
+  if (user.role !== 'admin' && user.role !== 'employee') return false;
+
   return true;
 }
 
@@ -268,6 +311,59 @@ async function handleToggleConfirm() {
   pendingToggleUserId = null;
   pendingToggleStatus = null;
   pendingToggleUserName = '';
+}
+
+// ── Role change modal ────────────────────────────────────────────────────────
+
+function openRoleModal(user) {
+  pendingRoleUserId   = user.id;
+  pendingRoleNewRole  = user.role === 'employee' ? 'admin' : 'employee';
+  pendingRoleUserName = user.full_name || 'this user';
+
+  const isPromoting = pendingRoleNewRole === 'admin';
+
+  document.getElementById('role-title').textContent   = isPromoting ? 'Make Admin' : 'Demote to Employee';
+  document.getElementById('role-message').textContent = isPromoting
+    ? `Promote ${pendingRoleUserName} to Admin? They will gain admin privileges.`
+    : `Demote ${pendingRoleUserName} to Employee? They will lose admin privileges.`;
+
+  const btn = document.getElementById('confirm-role-btn');
+  btn.className = `btn btn-sm ${isPromoting ? 'btn-primary' : 'btn-warning'}`;
+  document.getElementById('role-btn-label').textContent = isPromoting ? 'Make Admin' : 'Demote';
+
+  roleModalInstance.show();
+}
+
+async function handleRoleConfirm() {
+  const btn     = document.getElementById('confirm-role-btn');
+  const spinner = document.getElementById('role-spinner');
+  btn.disabled  = true;
+  spinner.classList.remove('d-none');
+
+  const { error } = await supabase.rpc('change_user_role', {
+    target_user_id: pendingRoleUserId,
+    new_role:       pendingRoleNewRole,
+  });
+
+  btn.disabled = false;
+  spinner.classList.add('d-none');
+
+  if (error) {
+    console.error('Change role error:', error);
+    showToast(error.message || 'Could not change user role.', 'danger');
+    return;
+  }
+
+  roleModalInstance.hide();
+
+  const actionPast = pendingRoleNewRole === 'admin' ? 'promoted to Admin' : 'demoted to Employee';
+  showToast(`${pendingRoleUserName} has been ${actionPast}.`, 'success');
+
+  await loadUsers();
+
+  pendingRoleUserId   = null;
+  pendingRoleNewRole  = null;
+  pendingRoleUserName = '';
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

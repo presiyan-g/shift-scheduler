@@ -17,7 +17,7 @@ A lightweight web app for small teams (10–50 employees) to manage work shifts,
 - **Frontend** — Vanilla JS, HTML, CSS, Bootstrap 5 (no frameworks)
 - **Backend** — [Supabase](https://supabase.com) (Postgres, Auth, Storage, REST)
 - **Build tool** — Vite
-- **Deployment** — Netlify / Vercel
+- **Deployment** — Netlify
 
 ## Getting Started
 
