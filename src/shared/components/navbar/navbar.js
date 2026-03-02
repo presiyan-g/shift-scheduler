@@ -1,7 +1,7 @@
 import { supabase } from '@shared/supabase.js';
-import { clearSessionCache } from '@shared/auth.js';
-import { escapeHtml } from '@shared/formatting.js';
-import { buildAvatarHtml } from '@shared/avatar.js';
+import { clearSessionCache } from '@shared/auth/auth.js';
+import { escapeHtml } from '@shared/utils/formatting.js';
+import { buildAvatarHtml } from '@shared/components/avatar/avatar.js';
 
 /**
  * Renders the shared navbar into a container element.

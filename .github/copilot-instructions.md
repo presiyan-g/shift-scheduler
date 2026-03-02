@@ -80,10 +80,25 @@ shift-scheduler/
 │   │       └── profile.css
 │   └── shared/                 ← reusable modules (NOT a page)
 │       ├── supabase.js         ← Supabase client initialisation (single instance)
-│       ├── auth.js             ← auth helpers (getUser, requireAuth, redirectIfAuthed)
-│       ├── auth.css            ← shared styles for login & register pages
-│       ├── navbar.js           ← shared navbar rendered via JS
-│       └── toast.js            ← toast notification helper
+│       ├── auth/               ← auth helpers & shared auth styles
+│       │   ├── auth.js
+│       │   └── auth.css
+│       ├── components/         ← reusable UI components
+│       │   ├── navbar/
+│       │   │   ├── navbar.js
+│       │   │   └── navbar.css
+│       │   ├── avatar/
+│       │   │   ├── avatar.js
+│       │   │   └── avatar.css
+│       │   └── toast/
+│       │       └── toast.js
+│       ├── services/           ← domain data services
+│       │   ├── shifts.js
+│       │   ├── teams.js
+│       │   ├── leave.js
+│       │   └── transfers.js
+│       └── utils/              ← formatting & string utilities
+│           └── formatting.js
 ├── .env                        ← VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 ├── vite.config.js
 └── package.json

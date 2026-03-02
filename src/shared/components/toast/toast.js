@@ -3,7 +3,7 @@
  * Injects a fixed toast container into the page on first use.
  *
  * Usage:
- *   import { showToast } from '@shared/toast.js';
+ *   import { showToast } from '@shared/components/toast/toast.js';
  *   showToast('Saved successfully', 'success');
  *   showToast('Something went wrong', 'danger');
  *

@@ -1,10 +1,10 @@
-import { requireAuth, getProfile } from '@shared/auth.js';
-import { renderNavbar } from '@shared/navbar.js';
+import { requireAuth, getProfile } from '@shared/auth/auth.js';
+import { renderNavbar } from '@shared/components/navbar/navbar.js';
 import { supabase } from '@shared/supabase.js';
-import { showToast } from '@shared/toast.js';
-import { getManagedTeams, getAllTeams } from '@shared/teams.js';
-import { escapeHtml, formatTime, toDateString, formatDateFull } from '@shared/formatting.js';
-import { buildAvatarHtml } from '@shared/avatar.js';
+import { showToast } from '@shared/components/toast/toast.js';
+import { getManagedTeams, getAllTeams } from '@shared/services/teams.js';
+import { escapeHtml, formatTime, toDateString, formatDateFull } from '@shared/utils/formatting.js';
+import { buildAvatarHtml } from '@shared/components/avatar/avatar.js';
 import {
   createLeaveRequest,
   getMyLeaveRequests,
@@ -15,7 +15,7 @@ import {
   getConflictingShifts,
   getReassignmentCandidates,
   cancelApprovedLeave,
-} from '@shared/leave.js';
+} from '@shared/services/leave.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 

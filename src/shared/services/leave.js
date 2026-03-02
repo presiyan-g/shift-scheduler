@@ -1,5 +1,5 @@
 import { supabase } from '@shared/supabase.js';
-import { getTeamMembers } from '@shared/teams.js';
+import { getTeamMembers } from '@shared/services/teams.js';
 
 // ── Shared select string for leave requests ──────────────────────────────────
 const LEAVE_REQUEST_SELECT = `

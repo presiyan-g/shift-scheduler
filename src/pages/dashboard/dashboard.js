@@ -1,11 +1,11 @@
-import { requireAuth, getProfile } from '@shared/auth.js';
-import { renderNavbar } from '@shared/navbar.js';
+import { requireAuth, getProfile } from '@shared/auth/auth.js';
+import { renderNavbar } from '@shared/components/navbar/navbar.js';
 import { supabase } from '@shared/supabase.js';
-import { showToast } from '@shared/toast.js';
-import { getManagedTeams } from '@shared/teams.js';
-import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/transfers.js';
-import { completeExpiredShifts } from '@shared/shifts.js';
-import { escapeHtml, formatTime, toDateString, formatDateShort } from '@shared/formatting.js';
+import { showToast } from '@shared/components/toast/toast.js';
+import { getManagedTeams } from '@shared/services/teams.js';
+import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/services/transfers.js';
+import { completeExpiredShifts } from '@shared/services/shifts.js';
+import { escapeHtml, formatTime, toDateString, formatDateShort } from '@shared/utils/formatting.js';
 
 let currentUser = null;
 let transferModalInstance = null;

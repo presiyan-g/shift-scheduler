@@ -75,7 +75,12 @@ src/
 │   ├── admin/         # Admin panel
 │   ├── profile/       # User profile & settings
 │   └── account/       # Account settings
-└── shared/            # Supabase client, auth helpers, navbar, toasts
+└── shared/            # Reusable modules
+    ├── auth/          # Auth helpers & styles
+    ├── components/    # UI components (navbar, avatar, toast)
+    ├── services/      # Domain services (shifts, teams, leave, transfers)
+    ├── utils/         # Formatting & string utilities
+    └── supabase.js    # Supabase client init
 supabase/
 └── migrations/        # SQL migration files (source of truth for DB schema)
 ```

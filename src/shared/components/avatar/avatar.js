@@ -5,7 +5,7 @@
  * or an icon placeholder. Used across navbar, admin, profile, and leave pages.
  */
 
-import { escapeHtml, getInitials } from '@shared/formatting.js';
+import { escapeHtml, getInitials } from '@shared/utils/formatting.js';
 
 /**
  * Build the inner HTML for an avatar bubble.

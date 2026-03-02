@@ -1,6 +1,6 @@
-import { redirectIfAuthed } from '@shared/auth.js';
+import { redirectIfAuthed } from '@shared/auth/auth.js';
 import { supabase } from '@shared/supabase.js';
-import { showToast } from '@shared/toast.js';
+import { showToast } from '@shared/components/toast/toast.js';
 
 async function init() {
   // Bounce already-authenticated users straight to dashboard

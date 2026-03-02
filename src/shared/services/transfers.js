@@ -1,5 +1,5 @@
 import { supabase } from '@shared/supabase.js';
-import { getTeamMembers } from '@shared/teams.js';
+import { getTeamMembers } from '@shared/services/teams.js';
 
 // ── Shared select string for transfer requests ──────────────────────────────
 const TRANSFER_REQUEST_SELECT = `

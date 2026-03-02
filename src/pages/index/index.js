@@ -1,4 +1,4 @@
-import { redirectIfAuthed } from '@shared/auth.js';
+import { redirectIfAuthed } from '@shared/auth/auth.js';
 
 async function init() {
   // If the user is already logged in, send them straight to the dashboard
