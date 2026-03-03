@@ -3,9 +3,19 @@ import { renderNavbar } from '@shared/components/navbar/navbar.js';
 import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/components/toast/toast.js';
 import { getAllTeams, getManagedTeams, getTeamEmployees } from '@shared/services/teams.js';
-import { createTransferRequest, getTransferTargets } from '@shared/services/transfers.js';
-import { completeExpiredShifts } from '@shared/services/shifts.js';
-import { escapeHtml, formatTime, formatTimeShort, toDateString } from '@shared/utils/formatting.js';
+import {
+  completeExpiredShifts, getShiftsForPeriod, getApprovedLeavesForPeriod,
+} from '@shared/services/shifts.js';
+import {
+  toDateString,
+  getWeekStart, formatWeekLabel,
+  getMonthStart, getMonthEnd, formatMonthLabel,
+} from '@shared/utils/formatting.js';
+import { renderWeekGrid } from './schedule-week-view.js';
+import { renderMonthMatrix, renderMyMonthCalendar } from './schedule-month-view.js';
+import { initDeleteModal, openDeleteModal } from './schedule-delete-modal.js';
+import { initTransferModal, openTransferModal, loadPendingTransferIds } from './schedule-transfer-modal.js';
+import { initShiftModal, openShiftModal, openShiftModalPrefilled } from './schedule-shift-modal.js';
 
 // ── Module-level state ──────────────────────────────────────────────────────
 
@@ -19,19 +29,8 @@ let managedTeams = [];       // teams the current manager manages
 let selectedTeamId = null;   // currently selected team filter (null = all)
 let employees = [];          // [{ id, full_name }] — loaded for the selected team
 let currentShifts = [];      // cached after each loadWeek()/loadMonth() for edit/delete lookup
-let pendingDeleteId = null;  // shift UUID awaiting deletion confirm
-let shiftModalInstance = null;
-let deleteModalInstance = null;
-let transferModalInstance = null;
-let shiftDatePicker = null;
-let shiftDateMode = 'single'; // 'single' | 'range' | 'multiple'
-let employeeExistingShiftDates = new Set(); // dates the selected employee already has a shift
 let pendingTransferShiftIds = new Set(); // shift IDs with active transfer requests
 let myShiftsOnly = false;  // toggle: true = current user's shifts only
-
-// Template suggestions state
-let shiftTemplates = [];        // cached after first load
-let shiftColorEnabled = false;  // true = color field has a value to save
 
 // Monthly view state
 let currentView = 'week';       // 'week' | 'month'
@@ -128,16 +127,31 @@ async function init() {
   currentWeekStart = getWeekStart(new Date());
   currentMonthDate = getMonthStart(new Date());
 
-  // Bootstrap modal instances
-  shiftModalInstance = new bootstrap.Modal(document.getElementById('shift-modal'));
-  deleteModalInstance = new bootstrap.Modal(document.getElementById('delete-modal'));
-  transferModalInstance = new bootstrap.Modal(document.getElementById('transfer-modal'));
-  initShiftDatePicker();
+  const reloadView = async () => {
+    if (currentView === 'week') await loadWeek();
+    else await loadMonth();
+  };
 
-  // Reset form validation state when modal closes
-  document.getElementById('shift-modal').addEventListener('hidden.bs.modal', () => {
-    const form = document.getElementById('shift-form');
-    form.classList.remove('was-validated');
+  initDeleteModal({
+    getCurrentShifts: () => currentShifts,
+    onSuccess: reloadView,
+  });
+
+  initTransferModal({
+    currentUser,
+    getCurrentShifts: () => currentShifts,
+    getPendingIds: () => pendingTransferShiftIds,
+    addPendingId: (id) => pendingTransferShiftIds.add(id),
+    onSuccess: reloadView,
+  });
+
+  initShiftModal({
+    currentUser,
+    isManager,
+    getEmployees: () => employees,
+    getCurrentShifts: () => currentShifts,
+    onSaveSuccess: reloadView,
+    fetchEmployeesForTeam,
   });
 
   // Load pending transfer request IDs for the current employee
@@ -205,17 +219,9 @@ function attachEventListeners() {
     if (transferBtn) openTransferModal(transferBtn.dataset.shiftId, transferBtn.dataset.teamId);
   });
 
-  document.getElementById('shift-save-btn').addEventListener('click', () => {
-    handleShiftSave();
-  });
-
-  document.getElementById('confirm-delete-btn').addEventListener('click', () => {
-    handleDeleteConfirm();
-  });
-
-  document.getElementById('transfer-submit-btn').addEventListener('click', () => {
-    handleTransferSubmit();
-  });
+  // confirm-delete-btn listener is wired inside initDeleteModal()
+  // transfer-submit-btn listener is wired inside initTransferModal()
+  // shift-save-btn + all shift-modal listeners wired inside initShiftModal()
 
   // Team filter change — reload shifts and employees for selected team
   document.getElementById('team-filter').addEventListener('change', async (e) => {
@@ -239,39 +245,6 @@ function attachEventListeners() {
     } else {
       await loadMonth();
     }
-  });
-
-  // Team dropdown in shift modal — reload employees when team changes
-  document.getElementById('shift-team').addEventListener('change', async (e) => {
-    const teamId = e.target.value;
-    if (teamId) {
-      await fetchEmployeesForTeam(teamId);
-    } else {
-      // Clear employee dropdown
-      const select = document.getElementById('shift-employee');
-      select.innerHTML = '<option value="">— Select employee —</option>';
-      employees = [];
-    }
-    await updateLeaveConflictWarning();
-  });
-
-  // Leave conflict + existing-shift checks: re-run when employee, date, or status changes
-  document.getElementById('shift-employee').addEventListener('change', async (e) => {
-    await loadEmployeeExistingShifts(e.target.value);
-    debouncedLeaveConflictWarning();
-    debouncedShiftConflictWarning();
-  });
-  document.getElementById('shift-date').addEventListener('change', () => {
-    debouncedLeaveConflictWarning();
-    debouncedShiftConflictWarning();
-  });
-  document.getElementById('shift-status').addEventListener('change', debouncedLeaveConflictWarning);
-
-  // Date mode toggle
-  document.querySelectorAll('input[name="shift-date-mode"]').forEach((radio) => {
-    radio.addEventListener('change', (e) => {
-      if (e.target.checked) onDateModeChange(e.target.value);
-    });
   });
 
   // Employee calendar: click shift pill for transfer, or click day cell to navigate
@@ -331,45 +304,6 @@ function attachEventListeners() {
     }
   });
 
-  // Template suggestions — title field
-  const titleInput    = document.getElementById('shift-title');
-  const suggestionsEl = document.getElementById('template-suggestions');
-
-  titleInput.addEventListener('focus', async () => {
-    await loadShiftTemplates();
-    renderTemplateSuggestions(titleInput.value);
-  });
-
-  titleInput.addEventListener('input', () => {
-    renderTemplateSuggestions(titleInput.value);
-  });
-
-  // Prevent blur from firing before the chip click registers
-  suggestionsEl.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-  });
-
-  suggestionsEl.addEventListener('click', (e) => {
-    const chip = e.target.closest('.template-chip');
-    if (chip) applyTemplateChip(chip);
-  });
-
-  titleInput.addEventListener('blur', () => {
-    hideTemplateSuggestions();
-  });
-
-  // Shift color field
-  document.getElementById('shift-color').addEventListener('input', () => {
-    shiftColorEnabled = true;
-    document.getElementById('shift-color-status').textContent = 'Color set';
-    document.getElementById('shift-color-clear').classList.remove('d-none');
-  });
-
-  document.getElementById('shift-color-clear').addEventListener('click', () => {
-    shiftColorEnabled = false;
-    document.getElementById('shift-color-status').textContent = 'No color';
-    document.getElementById('shift-color-clear').classList.add('d-none');
-  });
 }
 
 // ── View toggle ─────────────────────────────────────────────────────────────
@@ -426,23 +360,12 @@ async function loadMonth() {
   const endStr = toDateString(monthEnd);
   const monthEmployees = await getMonthViewEmployees();
 
-  let query = supabase
-    .from('shifts')
-    .select('*, employee:profiles!employee_id(id, full_name)')
-    .gte('shift_date', startStr)
-    .lte('shift_date', endStr)
-    .order('start_time', { ascending: true });
-
-  if (selectedTeamId) {
-    query = query.eq('team_id', selectedTeamId);
-  }
-
-  // Honour "My shifts only" toggle for any role
-  if (myShiftsOnly) {
-    query = query.eq('employee_id', currentUser.id);
-  }
-
-  const { data: shifts, error } = await query;
+  const { data: shifts, error } = await getShiftsForPeriod({
+    startDate: startStr,
+    endDate: endStr,
+    teamId: selectedTeamId,
+    employeeId: myShiftsOnly ? currentUser.id : null,
+  });
 
   if (error) {
     console.error('Month shifts fetch error:', error);
@@ -454,20 +377,23 @@ async function loadMonth() {
 
   currentShifts = shifts || [];
 
-  // Co-fetch leave requests for the month period
-  let leaveMonthQuery = supabase
-    .from('leave_requests')
-    .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
-    .eq('status', 'approved')
-    .lte('start_date', endStr)
-    .gte('end_date', startStr);
-  if (myShiftsOnly) leaveMonthQuery = leaveMonthQuery.eq('employee_id', currentUser.id);
-  const { data: monthLeaves } = await leaveMonthQuery;
+  const monthLeaves = await getApprovedLeavesForPeriod({
+    startDate: startStr,
+    endDate: endStr,
+    employeeId: myShiftsOnly ? currentUser.id : null,
+  });
+
+  const monthCtx = {
+    currentUserId: currentUser.id,
+    isManager,
+    pendingTransferShiftIds,
+    monthDate: currentMonthDate,
+  };
 
   if (showCalendar) {
-    renderMyMonthCalendar(currentShifts, monthLeaves || []);
+    renderMyMonthCalendar(monthCtx, currentShifts, monthLeaves || []);
   } else {
-    renderMonthMatrix(currentShifts, monthEmployees, monthLeaves || []);
+    renderMonthMatrix(monthCtx, currentShifts, monthEmployees, monthLeaves || []);
   }
 
   loading.classList.add('d-none');
@@ -538,24 +464,12 @@ async function loadWeek() {
   const weekStartStr = toDateString(currentWeekStart);
   const weekEndStr = toDateString(weekEnd);
 
-  let query = supabase
-    .from('shifts')
-    .select('*, employee:profiles!employee_id(id, full_name)')
-    .gte('shift_date', weekStartStr)
-    .lte('shift_date', weekEndStr)
-    .order('start_time', { ascending: true });
-
-  // Filter by selected team (managers/admins)
-  if (selectedTeamId) {
-    query = query.eq('team_id', selectedTeamId);
-  }
-
-  // Honour "My shifts only" toggle for any role
-  if (myShiftsOnly) {
-    query = query.eq('employee_id', currentUser.id);
-  }
-
-  const { data: shifts, error } = await query;
+  const { data: shifts, error } = await getShiftsForPeriod({
+    startDate: weekStartStr,
+    endDate: weekEndStr,
+    teamId: selectedTeamId,
+    employeeId: myShiftsOnly ? currentUser.id : null,
+  });
 
   if (error) {
     console.error('Shifts fetch error:', error);
@@ -567,17 +481,18 @@ async function loadWeek() {
 
   currentShifts = shifts || [];
 
-  // Co-fetch leave requests for the week period
-  let leaveWeekQuery = supabase
-    .from('leave_requests')
-    .select('id, employee_id, start_date, end_date, leave_type, status, employee:profiles!employee_id(id, full_name)')
-    .eq('status', 'approved')
-    .lte('start_date', weekEndStr)
-    .gte('end_date', weekStartStr);
-  if (myShiftsOnly) leaveWeekQuery = leaveWeekQuery.eq('employee_id', currentUser.id);
-  const { data: weekLeaves } = await leaveWeekQuery;
+  const weekLeaves = await getApprovedLeavesForPeriod({
+    startDate: weekStartStr,
+    endDate: weekEndStr,
+    employeeId: myShiftsOnly ? currentUser.id : null,
+  });
 
-  renderWeekGrid(currentShifts, weekLeaves || []);
+  renderWeekGrid({
+    currentUserId: currentUser.id,
+    isManager,
+    pendingTransferShiftIds,
+    weekStart: currentWeekStart,
+  }, currentShifts, weekLeaves || []);
 
   loading.classList.add('d-none');
   grid.classList.remove('d-none');
@@ -595,1099 +510,6 @@ async function fetchEmployeesForTeam(teamId) {
     opt.textContent = emp.full_name;
     select.appendChild(opt);
   });
-}
-
-// ── Rendering ────────────────────────────────────────────────────────────────
-
-function renderWeekGrid(shifts, leaves = []) {
-  const grid = document.getElementById('week-grid');
-  grid.innerHTML = '';
-
-  const today = toDateString(new Date());
-  const days = getWeekDays(currentWeekStart);
-
-  // Build leaveMap[dateStr] = [leave, ...] for days in this week
-  const leaveMap = {};
-  days.forEach((d) => { leaveMap[toDateString(d)] = []; });
-  leaves.forEach((lr) => {
-    let cur = new Date(lr.start_date + 'T00:00:00');
-    const end = new Date(lr.end_date + 'T00:00:00');
-    while (cur <= end) {
-      const ds = toDateString(cur);
-      if (leaveMap[ds]) leaveMap[ds].push(lr);
-      cur.setDate(cur.getDate() + 1);
-    }
-  });
-
-  days.forEach((dayDate) => {
-    const dateStr = toDateString(dayDate);
-    const isToday = dateStr === today;
-    const dayShifts = shifts.filter((s) => s.shift_date === dateStr);
-
-    const col = document.createElement('div');
-    col.className = 'col-12 col-sm-6 col-md-4 col-lg schedule-day-col';
-    col.innerHTML = buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts, leaveMap[dateStr] || []);
-    grid.appendChild(col);
-  });
-}
-
-function buildDayColumnHtml(dayDate, dateStr, isToday, dayShifts, dayLeaves = []) {
-  const weekday = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const monthDay = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-  const todayCardClass = isToday ? ' today-card' : '';
-  const headerClass = isToday ? ' today-header' : ' bg-white';
-  const labelClass = isToday ? ' today-day-label fw-bold' : ' text-muted';
-  const todayBadge = isToday
-    ? `<span class="badge bg-primary ms-auto">Today</span>`
-    : '';
-
-  const typeLabels = { sick: 'Sick', vacation: 'Vacation', personal: 'Personal', other: 'Leave' };
-  const leaveBannersHtml = dayLeaves.map((lr) => {
-    const isOwn = lr.employee_id === currentUser.id;
-    const name = isOwn ? 'You' : escapeHtml(lr.employee?.full_name || '—');
-    const typeLabel = typeLabels[lr.leave_type] || 'Leave';
-    return `<div class="leave-day-banner leave-banner-approved">
-      <i class="bi bi-airplane me-1"></i>${name} — ${typeLabel}
-    </div>`;
-  }).join('');
-
-  const shiftsHtml =
-    dayShifts.length === 0
-      ? `<p class="text-muted text-center small my-auto py-3 mb-0">No shifts</p>`
-      : dayShifts.map((s) => buildShiftCardHtml(s)).join('');
-
-  return `
-    <div class="card border-0 shadow-sm h-100 schedule-day-card${todayCardClass}">
-      <div class="card-header d-flex align-items-center gap-2 py-2${headerClass}">
-        <div>
-          <div class="fw-semibold small${labelClass}">${escapeHtml(weekday)}</div>
-          <div class="small text-muted">${escapeHtml(monthDay)}</div>
-        </div>
-        ${todayBadge}
-      </div>
-      <div class="card-body p-2 d-flex flex-column gap-2">
-        ${leaveBannersHtml}
-        ${shiftsHtml}
-      </div>
-    </div>
-  `;
-}
-
-function buildShiftCardHtml(shift) {
-  const statusClass = `shift-status-${shift.status}`;
-  const badgeClass = {
-    scheduled: 'bg-primary-subtle text-primary',
-    completed: 'bg-success-subtle text-success',
-    cancelled: 'bg-danger-subtle text-danger',
-  }[shift.status] || 'bg-secondary-subtle text-secondary';
-
-  // Show employee name when viewing someone else's shift
-  const isOwnShift = shift.employee_id === currentUser.id;
-  const employeeRow = !isOwnShift
-    ? `<div class="shift-employee-name mt-1">
-         <i class="bi bi-person-fill me-1"></i>${escapeHtml(shift.employee?.full_name || '—')}
-       </div>`
-    : '';
-
-  let actionBtns = '';
-  if (isManager) {
-    // Managers/admins: always show edit and delete
-    actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
-         <button
-           class="btn btn-sm btn-outline-secondary py-0 px-1 edit-shift-btn"
-           data-shift-id="${shift.id}"
-           title="Edit shift"
-           type="button"
-         ><i class="bi bi-pencil"></i></button>
-         <button
-           class="btn btn-sm btn-outline-danger py-0 px-1 delete-shift-btn"
-           data-shift-id="${shift.id}"
-           title="Delete shift"
-           type="button"
-         ><i class="bi bi-trash"></i></button>
-       </div>`;
-  } else if (isOwnShift && shift.status === 'scheduled' && shift.shift_date >= toDateString(new Date()) && shift.team_id) {
-    // Employee's own eligible shift: show transfer button
-    if (pendingTransferShiftIds.has(shift.id)) {
-      actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
-        <span class="badge bg-warning-subtle text-warning rounded-pill" style="font-size:0.68rem;">
-          <i class="bi bi-hourglass-split me-1"></i>Transfer Pending
-        </span>
-      </div>`;
-    } else {
-      actionBtns = `<div class="d-flex gap-1 mt-2 justify-content-end">
-        <button
-          class="btn btn-sm btn-outline-primary py-0 px-2 request-transfer-btn"
-          data-shift-id="${shift.id}"
-          data-team-id="${shift.team_id}"
-          title="Request shift transfer"
-          type="button"
-          style="font-size:0.72rem;"
-        ><i class="bi bi-arrow-right-circle me-1"></i>Transfer</button>
-      </div>`;
-    }
-  }
-  // else: teammate's shift → no action buttons (read-only)
-
-  const colorStyle = shift.color
-    ? `style="border-left: 3px solid ${escapeHtml(shift.color)} !important;"`
-    : '';
-
-  return `
-    <div class="shift-card p-2 rounded border ${statusClass}" ${colorStyle}>
-      <div class="d-flex align-items-start justify-content-between gap-1">
-        <span class="fw-semibold text-truncate">${escapeHtml(shift.title || 'Shift')}</span>
-        <span class="badge ${badgeClass} rounded-pill text-nowrap">${shift.status}</span>
-      </div>
-      <div class="text-muted mt-1">
-        <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
-      </div>
-      ${employeeRow}
-      ${actionBtns}
-    </div>
-  `;
-}
-
-// ── Monthly renderer ─────────────────────────────────────────────────────────
-
-function renderMonthMatrix(shifts, rosterEmployees = [], leaves = []) {
-  const container = document.getElementById('month-matrix-container');
-  container.innerHTML = '';
-
-  const today = toDateString(new Date());
-  const daysInMonth = getDaysInMonth(currentMonthDate);
-  const monthNum = currentMonthDate.getMonth();
-  const year = currentMonthDate.getFullYear();
-
-  // Group shifts by employee_id -> date -> [shifts]
-  const shiftMap = {};
-  const employeeMap = {};
-
-  (rosterEmployees || []).forEach((employee) => {
-    if (!employee?.id) return;
-    employeeMap[employee.id] = {
-      id: employee.id,
-      full_name: employee.full_name || 'Unknown',
-    };
-  });
-
-  shifts.forEach((s) => {
-    const empId = s.employee_id;
-    if (!shiftMap[empId]) shiftMap[empId] = {};
-    if (!shiftMap[empId][s.shift_date]) shiftMap[empId][s.shift_date] = [];
-    shiftMap[empId][s.shift_date].push(s);
-
-    if (!employeeMap[empId]) {
-      employeeMap[empId] = {
-        id: empId,
-        full_name: s.employee?.full_name || 'Unknown',
-      };
-    }
-  });
-
-  // Build leaveMap[empId][dateStr] = [leave, ...]
-  const leaveMap = {};
-  leaves.forEach((lr) => {
-    if (!leaveMap[lr.employee_id]) leaveMap[lr.employee_id] = {};
-    let cur = new Date(lr.start_date + 'T00:00:00');
-    const endD = new Date(lr.end_date + 'T00:00:00');
-    while (cur <= endD) {
-      const ds = toDateString(cur);
-      if (!leaveMap[lr.employee_id][ds]) leaveMap[lr.employee_id][ds] = [];
-      leaveMap[lr.employee_id][ds].push(lr);
-      cur.setDate(cur.getDate() + 1);
-    }
-  });
-
-  const sortedEmployees = Object.values(employeeMap).sort((a, b) =>
-    a.full_name.localeCompare(b.full_name)
-  );
-
-  let html = '<div class="month-matrix-wrapper">';
-  html += '<table class="month-matrix-table">';
-
-  // Header row
-  html += '<thead><tr><th class="month-matrix-employee-header">Employee</th>';
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateObj = new Date(year, monthNum, d);
-    const dateStr = toDateString(dateObj);
-    const isToday = dateStr === today;
-    const dayAbbr = dateObj.toLocaleDateString('en-US', { weekday: 'narrow' });
-    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-
-    html += `<th class="month-matrix-day-header${isToday ? ' matrix-today-header' : ''}${isWeekend ? ' matrix-weekend' : ''}">
-      <div class="matrix-day-abbr">${dayAbbr}</div>
-      <div class="matrix-day-num">${d}</div>
-    </th>`;
-  }
-  html += '</tr></thead>';
-
-  // Body: one row per employee
-  html += '<tbody>';
-  if (sortedEmployees.length === 0) {
-    html += `<tr><td class="month-matrix-employee-name text-muted" colspan="${daysInMonth + 1}">No employees found for this view.</td></tr>`;
-  }
-
-  sortedEmployees.forEach((emp) => {
-    html += '<tr>';
-    html += `<td class="month-matrix-employee-name">${escapeHtml(emp.full_name)}</td>`;
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = toDateString(new Date(year, monthNum, d));
-      const isToday = dateStr === today;
-      const dateObj = new Date(year, monthNum, d);
-      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-      const cellShifts = shiftMap[emp.id]?.[dateStr] || [];
-
-      let cellHtml = '';
-      cellShifts.forEach((s) => {
-        const statusColor = {
-          scheduled: 'primary',
-          completed: 'success',
-          cancelled: 'danger',
-        }[s.status] || 'secondary';
-
-        const pillColorStyle = s.color
-          ? `style="border-left: 3px solid ${escapeHtml(s.color)}; background-color: ${escapeHtml(s.color)}22 !important;"`
-          : '';
-        cellHtml += `<div class="matrix-shift-pill badge bg-${statusColor}-subtle text-${statusColor}"
-          data-shift-id="${s.id}"
-          ${pillColorStyle}
-          title="${escapeHtml(s.title)}: ${formatTime(s.start_time)}\u2013${formatTime(s.end_time)}">
-          ${formatTimeShort(s.start_time)}-${formatTimeShort(s.end_time)}
-        </div>`;
-      });
-
-      // Leave pills
-      const cellLeaves = leaveMap[emp.id]?.[dateStr] || [];
-      const leaveTypeLabels = { sick: 'Sick', vacation: 'Vacation', personal: 'Personal', other: 'Leave' };
-      cellLeaves.forEach((lr) => {
-        const typeLabel = leaveTypeLabels[lr.leave_type] || 'Leave';
-        cellHtml += `<div class="matrix-leave-pill" title="${typeLabel}">
-          <i class="bi bi-airplane"></i>
-        </div>`;
-      });
-
-      const hasApprovedLeave = cellLeaves.length > 0;
-      const todayClass = isToday ? ' matrix-today-cell' : '';
-      const weekendClass = isWeekend ? ' matrix-weekend' : '';
-      const leaveCellClass = hasApprovedLeave ? ' matrix-leave-cell' : '';
-      html += `<td class="month-matrix-cell${todayClass}${weekendClass}${leaveCellClass}" data-date="${dateStr}" data-employee="${emp.id}">${cellHtml}</td>`;
-    }
-
-    html += '</tr>';
-  });
-  html += '</tbody></table></div>';
-
-  container.innerHTML = html;
-}
-
-function renderMyMonthCalendar(shifts, leaves = []) {
-  const container = document.getElementById('month-calendar-grid');
-  container.innerHTML = '';
-
-  const todayStr = toDateString(new Date());
-  const monthStart = getMonthStart(currentMonthDate);
-  const monthYear = monthStart.getFullYear();
-  const monthNum = monthStart.getMonth();
-  const firstDayOffset = (monthStart.getDay() + 6) % 7; // 0=Mon
-
-  const gridStart = new Date(monthYear, monthNum, 1 - firstDayOffset);
-  const days = Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
-    return date;
-  });
-
-  const shiftMap = {};
-  (shifts || []).forEach((shift) => {
-    if (!shift?.shift_date) return;
-    if (!shiftMap[shift.shift_date]) shiftMap[shift.shift_date] = [];
-    shiftMap[shift.shift_date].push(shift);
-  });
-
-  const leaveMap = {};
-  (leaves || []).forEach((leave) => {
-    let cur = new Date(`${leave.start_date}T00:00:00`);
-    const end = new Date(`${leave.end_date}T00:00:00`);
-    while (cur <= end) {
-      const key = toDateString(cur);
-      if (!leaveMap[key]) leaveMap[key] = [];
-      leaveMap[key].push(leave);
-      cur.setDate(cur.getDate() + 1);
-    }
-  });
-
-  const weekDayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  let html = '<div class="month-calendar">';
-  html += '<div class="month-cal-header">';
-  weekDayHeaders.forEach((label) => {
-    html += `<div class="month-cal-header-cell">${label}</div>`;
-  });
-  html += '</div>';
-
-  html += '<div class="month-cal-body">';
-  days.forEach((dateObj) => {
-    const dateStr = toDateString(dateObj);
-    const inCurrentMonth = dateObj.getMonth() === monthNum;
-    const isToday = dateStr === todayStr;
-    const dayShifts = shiftMap[dateStr] || [];
-    const dayLeaves = leaveMap[dateStr] || [];
-
-    const cellClasses = [
-      'month-cal-cell',
-      inCurrentMonth ? '' : 'month-cal-outside',
-      isToday ? 'month-cal-today' : '',
-    ].filter(Boolean).join(' ');
-
-    let entriesHtml = '';
-    dayShifts.slice(0, 3).forEach((shift) => {
-      const isEligibleForTransfer =
-        !isManager &&
-        shift.employee_id === currentUser.id &&
-        shift.status === 'scheduled' &&
-        shift.shift_date >= todayStr &&
-        shift.team_id &&
-        !pendingTransferShiftIds.has(shift.id);
-
-      const isClickable = isManager || isEligibleForTransfer;
-      const statusTone = {
-        scheduled: 'primary',
-        completed: 'success',
-        cancelled: 'danger',
-      }[shift.status] || 'secondary';
-
-      const transferHint = !isManager && pendingTransferShiftIds.has(shift.id)
-        ? '<i class="bi bi-hourglass-split"></i>'
-        : '';
-
-      const calPillColorStyle = shift.color
-        ? `style="border-left: 3px solid ${escapeHtml(shift.color)}; background-color: ${escapeHtml(shift.color)}22 !important;"`
-        : '';
-
-      entriesHtml += `
-        <div
-          class="month-cal-shift bg-${statusTone}-subtle text-${statusTone}${isClickable ? ' month-cal-shift-clickable' : ''}"
-          data-shift-id="${shift.id}"
-          data-team-id="${shift.team_id || ''}"
-          title="${escapeHtml(shift.title || 'Shift')}: ${formatTime(shift.start_time)}–${formatTime(shift.end_time)}"
-          ${calPillColorStyle}
-        >
-          <span class="month-cal-shift-time">${formatTimeShort(shift.start_time)}-${formatTimeShort(shift.end_time)}</span>
-          <span class="month-cal-shift-title">${escapeHtml(shift.title || 'Shift')}</span>
-          ${transferHint}
-        </div>
-      `;
-    });
-
-    if (dayShifts.length > 3) {
-      entriesHtml += `<div class="month-cal-more text-muted">+${dayShifts.length - 3} more</div>`;
-    }
-
-    if (dayLeaves.length > 0) {
-      const hasApproved = dayLeaves.some((leave) => leave.status === 'approved');
-      const leaveLabel = hasApproved ? 'Leave' : 'Leave pending';
-      entriesHtml += `<div class="month-cal-more ${hasApproved ? 'text-warning-emphasis' : 'text-muted'}"><i class="bi bi-airplane"></i> ${leaveLabel}</div>`;
-    }
-
-    html += `
-      <div class="${cellClasses}" data-date="${dateStr}">
-        <div class="month-cal-day-number ${isToday ? 'fw-bold text-primary' : ''}">${dateObj.getDate()}</div>
-        ${entriesHtml}
-      </div>
-    `;
-  });
-  html += '</div></div>';
-
-  container.innerHTML = html;
-}
-
-// ── Shift template suggestions ───────────────────────────────────────────────
-
-async function loadShiftTemplates() {
-  if (shiftTemplates.length > 0) return; // cached — skip reload
-  const { data, error } = await supabase
-    .from('shift_templates')
-    .select('id, title, start_time, end_time, notes, color')
-    .order('title', { ascending: true });
-  if (error) {
-    console.error('Templates fetch error:', error);
-    return;
-  }
-  shiftTemplates = data || [];
-}
-
-function renderTemplateSuggestions(filterText = '') {
-  const container = document.getElementById('template-suggestions');
-  if (!container) return;
-
-  const lower    = filterText.toLowerCase().trim();
-  const filtered = lower
-    ? shiftTemplates.filter((t) => t.title.toLowerCase().includes(lower))
-    : shiftTemplates;
-
-  if (filtered.length === 0) {
-    container.classList.add('d-none');
-    return;
-  }
-
-  container.innerHTML = filtered
-    .map((t) => {
-      const dotHtml = t.color
-        ? `<span class="template-chip-dot" style="background-color:${escapeHtml(t.color)}"></span>`
-        : '';
-      return `<button
-        type="button"
-        class="template-chip"
-        data-id="${escapeHtml(t.id)}"
-        data-title="${escapeHtml(t.title)}"
-        data-start="${escapeHtml(t.start_time?.slice(0, 5) || '')}"
-        data-end="${escapeHtml(t.end_time?.slice(0, 5) || '')}"
-        data-notes="${escapeHtml(t.notes || '')}"
-        data-color="${escapeHtml(t.color || '')}"
-      >${dotHtml}${escapeHtml(t.title)}</button>`;
-    })
-    .join('');
-
-  container.classList.remove('d-none');
-}
-
-function applyTemplateChip(chip) {
-  document.getElementById('shift-title').value = chip.dataset.title;
-  document.getElementById('shift-start').value = chip.dataset.start;
-  document.getElementById('shift-end').value   = chip.dataset.end;
-  document.getElementById('shift-notes').value = chip.dataset.notes;
-
-  const color = chip.dataset.color;
-  if (color) {
-    shiftColorEnabled = true;
-    document.getElementById('shift-color').value              = color;
-    document.getElementById('shift-color-status').textContent = 'Color set';
-    document.getElementById('shift-color-clear').classList.remove('d-none');
-  } else {
-    shiftColorEnabled = false;
-    document.getElementById('shift-color-status').textContent = 'No color';
-    document.getElementById('shift-color-clear').classList.add('d-none');
-  }
-
-  hideTemplateSuggestions();
-}
-
-function hideTemplateSuggestions() {
-  const container = document.getElementById('template-suggestions');
-  if (container) container.classList.add('d-none');
-}
-
-// ── Debounce helper ──────────────────────────────────────────────────────────
-
-function debounce(fn, delay) {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
-
-const debouncedLeaveConflictWarning = debounce(updateLeaveConflictWarning, 350);
-const debouncedShiftConflictWarning = debounce(updateShiftConflictWarning, 350);
-
-// ── Leave conflict check (shift modal) ──────────────────────────────────────
-
-async function updateLeaveConflictWarning() {
-  const warningEl = document.getElementById('leave-conflict-warning');
-  const saveBtn   = document.getElementById('shift-save-btn');
-  const employeeId = isManager
-    ? document.getElementById('shift-employee').value
-    : currentUser.id;
-  const dates = getShiftDateValue();
-
-  // In edit mode, skip check when setting status to non-scheduled
-  const statusField = document.getElementById('status-field');
-  if (!statusField.classList.contains('d-none')) {
-    const statusVal = document.getElementById('shift-status').value;
-    if (statusVal && statusVal !== 'scheduled') {
-      warningEl.classList.add('d-none');
-      saveBtn.disabled = false;
-      return;
-    }
-  }
-
-  if (!employeeId || dates.length === 0) {
-    warningEl.classList.add('d-none');
-    saveBtn.disabled = false;
-    return;
-  }
-
-  const minDate = dates.reduce((a, b) => a < b ? a : b);
-  const maxDate = dates.reduce((a, b) => a > b ? a : b);
-
-  const { data } = await supabase
-    .from('leave_requests')
-    .select('id, start_date, end_date, leave_type')
-    .eq('employee_id', employeeId)
-    .eq('status', 'approved')
-    .lte('start_date', maxDate)
-    .gte('end_date', minDate);
-
-  if (!data || data.length === 0) {
-    warningEl.classList.add('d-none');
-    saveBtn.disabled = false;
-    return;
-  }
-
-  const conflictingDates = dates.filter((d) =>
-    data.some((lr) => d >= lr.start_date && d <= lr.end_date)
-  );
-
-  if (conflictingDates.length > 0) {
-    const lr = data[0];
-    const typeLabel = { sick: 'Sick Leave', vacation: 'Vacation', personal: 'Personal', other: 'Other' }[lr.leave_type] || lr.leave_type;
-    const count = conflictingDates.length;
-    const isSingle = shiftDateMode === 'single';
-    warningEl.querySelector('.leave-conflict-text').textContent = isSingle
-      ? `This employee has approved ${typeLabel} from ${lr.start_date} to ${lr.end_date}. Shifts cannot be created during this period.`
-      : `${count} of the selected date${count > 1 ? 's' : ''} conflict with an approved ${typeLabel} (${lr.start_date} to ${lr.end_date}). Shifts cannot be created on those dates.`;
-    warningEl.classList.remove('d-none');
-    saveBtn.disabled = true;
-  } else {
-    warningEl.classList.add('d-none');
-    saveBtn.disabled = false;
-  }
-}
-
-// ── Load existing shifts for selected employee (used by date picker dots) ────
-
-async function loadEmployeeExistingShifts(employeeId) {
-  employeeExistingShiftDates = new Set();
-  if (employeeId) {
-    const today = new Date();
-    const fromDate = toDateString(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-    const toDate   = toDateString(new Date(today.getFullYear() + 1, today.getMonth(), today.getDate()));
-
-    const { data } = await supabase
-      .from('shifts')
-      .select('shift_date')
-      .eq('employee_id', employeeId)
-      .gte('shift_date', fromDate)
-      .lte('shift_date', toDate);
-
-    if (data) data.forEach((s) => employeeExistingShiftDates.add(s.shift_date));
-  }
-  // Re-init picker so onDayCreate marks the freshly loaded dates
-  initShiftDatePicker(shiftDateMode);
-}
-
-// ── Existing shift conflict warning (non-blocking) ───────────────────────────
-
-function updateShiftConflictWarning() {
-  const warningEl = document.getElementById('shift-conflict-warning');
-  // Only relevant in create mode
-  if (document.getElementById('shift-id').value) {
-    warningEl.classList.add('d-none');
-    return;
-  }
-
-  const dates = getShiftDateValue();
-  if (dates.length === 0 || employeeExistingShiftDates.size === 0) {
-    warningEl.classList.add('d-none');
-    return;
-  }
-
-  const conflicting = dates.filter((d) => employeeExistingShiftDates.has(d));
-  if (conflicting.length > 0) {
-    const count    = conflicting.length;
-    const dateList = conflicting.slice(0, 3).join(', ') + (conflicting.length > 3 ? '…' : '');
-    warningEl.querySelector('.shift-conflict-text').textContent = shiftDateMode === 'single'
-      ? `This employee already has a shift on ${conflicting[0]}.`
-      : `${count} selected date${count > 1 ? 's' : ''} already have a shift: ${dateList}.`;
-    warningEl.classList.remove('d-none');
-  } else {
-    warningEl.classList.add('d-none');
-  }
-}
-
-// ── Modal: Shift create / edit ───────────────────────────────────────────────
-
-function openShiftModal(shiftId) {
-  const form = document.getElementById('shift-form');
-  form.reset();
-  form.classList.remove('was-validated');
-
-  const titleEl = document.getElementById('shift-modal-label');
-  const shiftIdEl = document.getElementById('shift-id');
-  const statusField = document.getElementById('status-field');
-  const saveLabelEl = document.getElementById('shift-save-label');
-
-  if (!shiftId) {
-    // Create mode — reset toggle to Single
-    employeeExistingShiftDates = new Set();
-    const singleRadio = document.getElementById('mode-single');
-    if (singleRadio) singleRadio.checked = true;
-    onDateModeChange('single');
-    document.getElementById('date-mode-toggle-wrap').classList.remove('d-none');
-
-    titleEl.textContent = 'Add Shift';
-    shiftIdEl.value = '';
-    statusField.classList.add('d-none');
-    saveLabelEl.textContent = 'Save Shift';
-    // Pre-fill date with today's date
-    setShiftDateValue(toDateString(new Date()));
-    // Reset color field
-    shiftColorEnabled = false;
-    document.getElementById('shift-color-status').textContent = 'No color';
-    document.getElementById('shift-color-clear').classList.add('d-none');
-    hideTemplateSuggestions();
-  } else {
-    // Edit mode — hide toggle, force single picker
-    document.getElementById('date-mode-toggle-wrap').classList.add('d-none');
-    onDateModeChange('single');
-
-    const shift = currentShifts.find((s) => s.id === shiftId);
-    if (!shift) return;
-
-    titleEl.textContent = 'Edit Shift';
-    shiftIdEl.value = shift.id;
-    statusField.classList.remove('d-none');
-    saveLabelEl.textContent = 'Update Shift';
-
-    if (isManager) {
-      if (shift.team_id) {
-        document.getElementById('shift-team').value = shift.team_id;
-      }
-      document.getElementById('shift-employee').value = shift.employee_id;
-    }
-    document.getElementById('shift-title').value = shift.title || '';
-    setShiftDateValue(shift.shift_date);
-    document.getElementById('shift-start').value = shift.start_time?.slice(0, 5) || '';
-    document.getElementById('shift-end').value = shift.end_time?.slice(0, 5) || '';
-    document.getElementById('shift-status').value = shift.status;
-    document.getElementById('shift-notes').value = shift.notes || '';
-    // Restore color field
-    if (shift.color) {
-      shiftColorEnabled = true;
-      document.getElementById('shift-color').value              = shift.color;
-      document.getElementById('shift-color-status').textContent = 'Color set';
-      document.getElementById('shift-color-clear').classList.remove('d-none');
-    } else {
-      shiftColorEnabled = false;
-      document.getElementById('shift-color-status').textContent = 'No color';
-      document.getElementById('shift-color-clear').classList.add('d-none');
-    }
-    hideTemplateSuggestions();
-  }
-
-  // Clear any stale warnings
-  document.getElementById('leave-conflict-warning').classList.add('d-none');
-  document.getElementById('shift-conflict-warning').classList.add('d-none');
-  document.getElementById('shift-save-btn').disabled = false;
-
-  shiftModalInstance.show();
-}
-
-function openShiftModalPrefilled(dateStr, employeeId) {
-  openShiftModal(null);
-  setShiftDateValue(dateStr);
-  if (employeeId) {
-    document.getElementById('shift-employee').value = employeeId;
-    loadEmployeeExistingShifts(employeeId).then(() => updateShiftConflictWarning());
-  }
-}
-
-async function handleShiftSave() {
-  const form = document.getElementById('shift-form');
-  form.classList.add('was-validated');
-
-  const dateInput = document.getElementById('shift-date');
-  dateInput.setCustomValidity('');
-
-  const dates = getShiftDateValue();
-  if (dates.length === 0) {
-    dateInput.setCustomValidity('Please select a date.');
-    form.classList.add('was-validated');
-    return;
-  }
-
-  if (!form.checkValidity()) return;
-
-  const saveBtn     = document.getElementById('shift-save-btn');
-  const spinner     = document.getElementById('shift-save-spinner');
-  const saveLabelEl = document.getElementById('shift-save-label');
-  saveBtn.disabled = true;
-  spinner.classList.remove('d-none');
-
-  const shiftId = document.getElementById('shift-id').value;
-  const isEdit  = Boolean(shiftId);
-
-  const basePayload = {
-    employee_id: isManager
-      ? document.getElementById('shift-employee').value
-      : currentUser.id,
-    title:      document.getElementById('shift-title').value.trim(),
-    start_time: document.getElementById('shift-start').value,
-    end_time:   document.getElementById('shift-end').value,
-    notes:      document.getElementById('shift-notes').value.trim() || null,
-    team_id:    isManager
-      ? document.getElementById('shift-team').value || null
-      : null,
-    color:      shiftColorEnabled ? document.getElementById('shift-color').value : null,
-  };
-
-  if (isEdit) {
-    // Edit mode: single date, unchanged behavior
-    const payload = {
-      ...basePayload,
-      shift_date: dates[0],
-      status: document.getElementById('shift-status').value,
-    };
-
-    const { error } = await supabase.from('shifts').update(payload).eq('id', shiftId);
-
-    saveBtn.disabled = false;
-    spinner.classList.add('d-none');
-
-    if (error) {
-      console.error('Shift save error:', error);
-      if (error.message?.includes('LEAVE_CONFLICT')) {
-        const warningEl = document.getElementById('leave-conflict-warning');
-        warningEl.querySelector('.leave-conflict-text').textContent =
-          'Cannot create shift: this employee has an approved leave during the selected date.';
-        warningEl.classList.remove('d-none');
-        saveBtn.disabled = true;
-      } else {
-        showToast(error.message || 'Could not save shift.', 'danger');
-      }
-      return;
-    }
-
-    shiftModalInstance.hide();
-    showToast('Shift updated.', 'success');
-
-  } else {
-    // Create mode: one insert per date
-    const totalDates = dates.length;
-    if (totalDates > 1) {
-      saveLabelEl.textContent = `Creating ${totalDates} shifts...`;
-    }
-
-    let successCount = 0;
-    const errors = [];
-
-    for (const date of dates) {
-      const payload = { ...basePayload, shift_date: date, created_by: currentUser.id };
-      const { error } = await supabase.from('shifts').insert(payload);
-      if (error) {
-        console.error(`Shift insert error for ${date}:`, error);
-        errors.push({ date, error });
-      } else {
-        successCount++;
-      }
-    }
-
-    saveBtn.disabled = false;
-    spinner.classList.add('d-none');
-    saveLabelEl.textContent = 'Save Shift';
-
-    if (errors.length === 0) {
-      shiftModalInstance.hide();
-      const msg = totalDates === 1 ? 'Shift created.' : `${successCount} shifts created.`;
-      showToast(msg, 'success');
-    } else if (successCount > 0) {
-      shiftModalInstance.hide();
-      showToast(
-        `${successCount} shift${successCount > 1 ? 's' : ''} created. ${errors.length} failed — check console for details.`,
-        'warning',
-        6000
-      );
-    } else {
-      const firstError = errors[0].error;
-      if (firstError.message?.includes('LEAVE_CONFLICT')) {
-        const warningEl = document.getElementById('leave-conflict-warning');
-        warningEl.querySelector('.leave-conflict-text').textContent =
-          'Cannot create shift: this employee has an approved leave during one or more selected dates.';
-        warningEl.classList.remove('d-none');
-        saveBtn.disabled = true;
-      } else {
-        showToast(firstError.message || 'Could not create shifts.', 'danger');
-      }
-      return;
-    }
-  }
-
-  if (currentView === 'week') {
-    await loadWeek();
-  } else {
-    await loadMonth();
-  }
-}
-
-function initShiftDatePicker(mode = 'single') {
-  const dateInput = document.getElementById('shift-date');
-  if (!dateInput || typeof window.flatpickr !== 'function') return;
-
-  if (shiftDatePicker) {
-    shiftDatePicker.destroy();
-    shiftDatePicker = null;
-  }
-
-  const commonConfig = {
-    dateFormat: 'Y-m-d',
-    locale: { firstDayOfWeek: 1 },
-    onDayCreate: (_dObj, _dStr, _fp, dayElem) => {
-      if (!dayElem.dateObj) return;
-      const dateStr = toDateString(dayElem.dateObj);
-      if (employeeExistingShiftDates.has(dateStr)) {
-        dayElem.classList.add('has-existing-shift');
-      }
-    },
-    onChange: () => {
-      dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-    },
-  };
-
-  if (mode === 'range') {
-    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'range' });
-  } else if (mode === 'multiple') {
-    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'multiple', conjunction: ', ' });
-  } else {
-    shiftDatePicker = window.flatpickr(dateInput, { ...commonConfig, mode: 'single' });
-  }
-}
-
-function onDateModeChange(newMode) {
-  shiftDateMode = newMode;
-  initShiftDatePicker(newMode);
-
-  const label    = document.getElementById('shift-date-label');
-  const hint     = document.getElementById('shift-date-hint');
-  const feedback = document.getElementById('shift-date-feedback');
-
-  if (newMode === 'single') {
-    label.textContent = 'Date';
-    hint.classList.add('d-none');
-    hint.textContent = '';
-    feedback.textContent = 'Please select a date.';
-  } else if (newMode === 'range') {
-    label.textContent = 'Date Range';
-    hint.textContent = 'Select a start and end date. One shift will be created for each day.';
-    hint.classList.remove('d-none');
-    feedback.textContent = 'Please select a date range.';
-  } else {
-    label.textContent = 'Dates';
-    hint.textContent = 'Click individual dates to select them. One shift will be created per date.';
-    hint.classList.remove('d-none');
-    feedback.textContent = 'Please select at least one date.';
-  }
-
-  document.getElementById('shift-date').value = '';
-  document.getElementById('leave-conflict-warning').classList.add('d-none');
-  document.getElementById('shift-save-btn').disabled = false;
-}
-
-function setShiftDateValue(dateStr) {
-  if (shiftDatePicker) {
-    shiftDatePicker.setDate(dateStr, false, 'Y-m-d');
-    return;
-  }
-  document.getElementById('shift-date').value = dateStr;
-}
-
-function getShiftDateValue() {
-  if (!shiftDatePicker) {
-    const raw = document.getElementById('shift-date').value.trim();
-    return raw ? [raw] : [];
-  }
-
-  const selectedDates = shiftDatePicker.selectedDates;
-
-  if (shiftDateMode === 'range') {
-    if (selectedDates.length < 2) return [];
-    const result = [];
-    const cur = new Date(selectedDates[0]);
-    const end = new Date(selectedDates[1]);
-    cur.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    while (cur <= end) {
-      result.push(toDateString(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return result;
-  } else if (shiftDateMode === 'multiple') {
-    return selectedDates.map((d) => toDateString(d));
-  } else {
-    return selectedDates.length > 0 ? [toDateString(selectedDates[0])] : [];
-  }
-}
-
-// ── Modal: Delete confirm ────────────────────────────────────────────────────
-
-function openDeleteModal(shiftId) {
-  pendingDeleteId = shiftId;
-  const shift = currentShifts.find((s) => s.id === shiftId);
-  document.getElementById('delete-shift-name').textContent = shift?.title || 'this shift';
-  deleteModalInstance.show();
-}
-
-async function handleDeleteConfirm() {
-  const confirmBtn = document.getElementById('confirm-delete-btn');
-  const spinner = document.getElementById('delete-spinner');
-  confirmBtn.disabled = true;
-  spinner.classList.remove('d-none');
-
-  const { error } = await supabase.from('shifts').delete().eq('id', pendingDeleteId);
-
-  confirmBtn.disabled = false;
-  spinner.classList.add('d-none');
-
-  if (error) {
-    console.error('Shift delete error:', error);
-    showToast(error.message || 'Could not delete shift.', 'danger');
-    return;
-  }
-
-  deleteModalInstance.hide();
-  pendingDeleteId = null;
-  showToast('Shift deleted.', 'success');
-  if (currentView === 'week') {
-    await loadWeek();
-  } else {
-    await loadMonth();
-  }
-}
-
-// ── Transfer request ─────────────────────────────────────────────────────────
-
-async function loadPendingTransferIds() {
-  const { data } = await supabase
-    .from('shift_transfer_requests')
-    .select('shift_id')
-    .eq('requester_id', currentUser.id)
-    .in('status', ['pending_target', 'pending_manager']);
-
-  pendingTransferShiftIds = new Set((data || []).map((r) => r.shift_id));
-}
-
-async function openTransferModal(shiftId, teamId) {
-  const shift = currentShifts.find((s) => s.id === shiftId);
-  if (!shift || !teamId) return;
-
-  document.getElementById('transfer-shift-summary').innerHTML = `
-    <strong>${escapeHtml(shift.title || 'Shift')}</strong><br>
-    <small class="text-muted">
-      <i class="bi bi-calendar3 me-1"></i>${shift.shift_date} &middot;
-      <i class="bi bi-clock me-1"></i>${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}
-    </small>
-  `;
-
-  document.getElementById('transfer-shift-id').value = shiftId;
-  document.getElementById('transfer-team-id').value = teamId;
-
-  const form = document.getElementById('transfer-form');
-  form.reset();
-  form.classList.remove('was-validated');
-
-  const targetSelect = document.getElementById('transfer-target');
-  targetSelect.innerHTML = '<option value="">Loading teammates...</option>';
-  targetSelect.disabled = true;
-
-  transferModalInstance.show();
-
-  const targets = await getTransferTargets(teamId, currentUser.id);
-  targetSelect.innerHTML = '<option value="">— Select teammate —</option>';
-  targets.forEach((t) => {
-    const opt = document.createElement('option');
-    opt.value = t.id;
-    opt.textContent = t.full_name;
-    targetSelect.appendChild(opt);
-  });
-  targetSelect.disabled = false;
-}
-
-async function handleTransferSubmit() {
-  const form = document.getElementById('transfer-form');
-  form.classList.add('was-validated');
-  if (!form.checkValidity()) return;
-
-  const btn = document.getElementById('transfer-submit-btn');
-  const spinner = document.getElementById('transfer-submit-spinner');
-  btn.disabled = true;
-  spinner.classList.remove('d-none');
-
-  const shiftId = document.getElementById('transfer-shift-id').value;
-  const teamId = document.getElementById('transfer-team-id').value;
-  const targetId = document.getElementById('transfer-target').value;
-  const note = document.getElementById('transfer-note').value.trim();
-
-  const shift = currentShifts.find((s) => s.id === shiftId);
-
-  const { error } = await createTransferRequest({
-    shiftId,
-    teamId,
-    requesterId: currentUser.id,
-    targetId,
-    requesterNote: note,
-    expiresAt: `${shift?.shift_date}T${shift?.start_time}`,
-  });
-
-  btn.disabled = false;
-  spinner.classList.add('d-none');
-
-  if (error) {
-    showToast(error.message || 'Could not send transfer request.', 'danger');
-    return;
-  }
-
-  transferModalInstance.hide();
-  showToast('Transfer request sent. Waiting for your teammate to accept.', 'success');
-
-  pendingTransferShiftIds.add(shiftId);
-  if (currentView === 'week') await loadWeek();
-  else await loadMonth();
-}
-
-// ── Date / time helpers ──────────────────────────────────────────────────────
-
-function getWeekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-  const diff = day === 0 ? -6 : 1 - day; // days back to Monday
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getWeekDays(weekStart) {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-}
-
-function formatWeekLabel(weekStart) {
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const opts = { weekday: 'short', month: 'short', day: 'numeric' };
-  const start = weekStart.toLocaleDateString('en-US', opts);
-  const end = weekEnd.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
-  return `${start} – ${end}`;
-}
-
-function getMonthStart(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function getMonthEnd(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-}
-
-function getDaysInMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-}
-
-function formatMonthLabel(date) {
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────

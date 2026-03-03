@@ -1,11 +1,11 @@
 import { requireAuth, getProfile } from '@shared/auth/auth.js';
 import { renderNavbar } from '@shared/components/navbar/navbar.js';
-import { supabase } from '@shared/supabase.js';
 import { showToast } from '@shared/components/toast/toast.js';
 import { getManagedTeams } from '@shared/services/teams.js';
-import { expireStaleRequests, createTransferRequest, getTransferTargets } from '@shared/services/transfers.js';
-import { completeExpiredShifts } from '@shared/services/shifts.js';
-import { escapeHtml, formatTime, toDateString, formatDateShort } from '@shared/utils/formatting.js';
+import { expireStaleRequests, createTransferRequest, getTransferTargets, getPendingManagerCount, getIncomingTransferCount } from '@shared/services/transfers.js';
+import { getPendingLeaveReviewCount, getMyPendingLeaveCount } from '@shared/services/leave.js';
+import { completeExpiredShifts, getShiftsForPeriod, getPendingTransferShiftIds } from '@shared/services/shifts.js';
+import { escapeHtml, formatTime, toDateString, formatDateShort, getWeekStart, getWeekEnd, getMonthStart, getMonthEnd, toDateOffset } from '@shared/utils/formatting.js';
 
 let currentUser = null;
 let transferModalInstance = null;
@@ -42,126 +42,73 @@ async function init() {
   }
 
   // 3. Date helpers
-  const today = toDateString(new Date());
-  const nextWeek = getDateOffset(7);
-  const lastWeek = getDateOffset(-7);
-  const startOfWeek = getStartOfWeek();
-  const endOfWeek = getEndOfWeek();
-  const startOfMonth = getStartOfMonth();
+  const now = new Date();
+  const today = toDateString(now);
+  const nextWeek = toDateOffset(7);
+  const lastWeek = toDateOffset(-7);
+  const startOfWeek = toDateString(getWeekStart(now));
+  const endOfWeek = toDateString(getWeekEnd(now));
+  const startOfMonth = toDateString(getMonthStart(now));
+  const endOfMonth = toDateString(getMonthEnd(now));
 
-  // 4. Fetch upcoming shifts (next 7 days, scheduled)
-  let upcomingQuery = supabase
-    .from('shifts')
-    .select('*, employee:profiles!employee_id(full_name)')
-    .gte('shift_date', today)
-    .lte('shift_date', nextWeek)
-    .eq('status', 'scheduled')
-    .order('shift_date', { ascending: true })
-    .order('start_time', { ascending: true });
+  // 4. Determine the broadest date range needed and fetch shifts via service
+  //    Month range covers week + today + completed stats; extend to nextWeek for upcoming list
+  const rangeEnd = nextWeek > endOfMonth ? nextWeek : endOfMonth;
+  const employeeFilter = !isManager ? user.id : null;
 
-  if (!isManager) {
-    upcomingQuery = upcomingQuery.eq('employee_id', user.id);
-  }
+  const [monthResult, recentResult] = await Promise.all([
+    getShiftsForPeriod({ startDate: startOfMonth, endDate: rangeEnd, employeeId: employeeFilter }),
+    getShiftsForPeriod({ startDate: lastWeek, endDate: today, employeeId: employeeFilter }),
+  ]);
 
-  const { data: upcomingShifts, error: upcomingError } = await upcomingQuery;
-
-  if (upcomingError) {
-    console.error('Shifts fetch error:', upcomingError);
+  if (monthResult.error) {
+    console.error('Shifts fetch error:', monthResult.error);
     showToast('Could not load shifts.', 'danger');
     return;
   }
 
-  // 5. Fetch recent/past shifts (last 7 days, max 5)
-  let recentQuery = supabase
-    .from('shifts')
-    .select('*, employee:profiles!employee_id(full_name)')
-    .lt('shift_date', today)
-    .gte('shift_date', lastWeek)
-    .order('shift_date', { ascending: false })
-    .order('start_time', { ascending: false })
-    .limit(5);
+  const allCurrentShifts = monthResult.data;
+  const allRecentShifts = recentResult.data;
 
-  if (!isManager) {
-    recentQuery = recentQuery.eq('employee_id', user.id);
-  }
+  // 5. Derive dashboard data from fetched shifts
+  const upcomingShifts = allCurrentShifts
+    .filter((s) => s.shift_date >= today && s.shift_date <= nextWeek && s.status === 'scheduled')
+    .sort((a, b) => a.shift_date.localeCompare(b.shift_date) || a.start_time.localeCompare(b.start_time));
 
-  const { data: recentShifts, error: recentError } = await recentQuery;
-
-  if (recentError) {
-    console.error('Recent shifts fetch error:', recentError);
-  }
+  const recentShifts = allRecentShifts
+    .filter((s) => s.shift_date < today)
+    .sort((a, b) => b.shift_date.localeCompare(a.shift_date) || b.start_time.localeCompare(a.start_time))
+    .slice(0, 5);
 
   // 6. Compute stats
+  document.getElementById('stat-upcoming').textContent = upcomingShifts.length;
 
-  // Upcoming count
-  document.getElementById('stat-upcoming').textContent = upcomingShifts?.length ?? 0;
-
-  // Hours this week
-  let weekQuery = supabase
-    .from('shifts')
-    .select('start_time, end_time')
-    .gte('shift_date', startOfWeek)
-    .lte('shift_date', endOfWeek)
-    .in('status', ['scheduled', 'completed']);
-
-  if (!isManager) {
-    weekQuery = weekQuery.eq('employee_id', user.id);
-  }
-
-  const { data: weekShifts } = await weekQuery;
-  const totalHours = calcTotalHours(weekShifts || []);
+  const weekShifts = allCurrentShifts.filter(
+    (s) => s.shift_date >= startOfWeek && s.shift_date <= endOfWeek && (s.status === 'scheduled' || s.status === 'completed')
+  );
+  const totalHours = calcTotalHours(weekShifts);
   document.getElementById('stat-hours-week').textContent = `${totalHours.toFixed(1)} hrs`;
 
-  // Hours this month
-  const endOfMonth = getEndOfMonth();
-
-  let monthHoursQuery = supabase
-    .from('shifts')
-    .select('start_time, end_time')
-    .gte('shift_date', startOfMonth)
-    .lte('shift_date', endOfMonth)
-    .in('status', ['scheduled', 'completed']);
-
-  if (!isManager) {
-    monthHoursQuery = monthHoursQuery.eq('employee_id', user.id);
-  }
-
-  const { data: monthShifts } = await monthHoursQuery;
-  const totalMonthHours = calcTotalHours(monthShifts || []);
+  const monthShifts = allCurrentShifts.filter(
+    (s) => s.shift_date >= startOfMonth && s.shift_date <= endOfMonth && (s.status === 'scheduled' || s.status === 'completed')
+  );
+  const totalMonthHours = calcTotalHours(monthShifts);
   document.getElementById('stat-hours-month').textContent = totalMonthHours.toFixed(1);
 
-  // Completed this month
-  let monthQuery = supabase
-    .from('shifts')
-    .select('id', { count: 'exact', head: true })
-    .gte('shift_date', startOfMonth)
-    .eq('status', 'completed');
+  const completedCount = allCurrentShifts.filter(
+    (s) => s.shift_date >= startOfMonth && s.status === 'completed'
+  ).length;
+  document.getElementById('stat-completed').textContent = completedCount;
 
-  if (!isManager) {
-    monthQuery = monthQuery.eq('employee_id', user.id);
-  }
-
-  const { count: completedCount } = await monthQuery;
-  document.getElementById('stat-completed').textContent = completedCount ?? 0;
-
-  // Today's shifts
-  let todayQuery = supabase
-    .from('shifts')
-    .select('id', { count: 'exact', head: true })
-    .eq('shift_date', today)
-    .eq('status', 'scheduled');
-
-  if (!isManager) {
-    todayQuery = todayQuery.eq('employee_id', user.id);
-  }
-
-  const { count: todayCount } = await todayQuery;
-  document.getElementById('stat-today').textContent = todayCount ?? 0;
+  const todayCount = allCurrentShifts.filter(
+    (s) => s.shift_date === today && s.status === 'scheduled'
+  ).length;
+  document.getElementById('stat-today').textContent = todayCount;
 
   // 7. Load pending transfer IDs for employees and init transfer modal
-  dashboardShifts = upcomingShifts || [];
+  dashboardShifts = upcomingShifts;
   if (!isManager) {
-    await loadPendingTransferIds();
+    pendingTransferShiftIds = await getPendingTransferShiftIds(user.id);
     transferModalInstance = new bootstrap.Modal(document.getElementById('transfer-modal'));
 
     document.getElementById('upcoming-shifts-list').addEventListener('click', (e) => {
@@ -173,8 +120,8 @@ async function init() {
   }
 
   // 8. Render shift lists
-  renderUpcomingShifts(upcomingShifts || [], isManager);
-  renderRecentShifts(recentShifts || [], isManager);
+  renderUpcomingShifts(upcomingShifts, isManager);
+  renderRecentShifts(recentShifts, isManager);
 
   // 9. Manager banner
   if (isManager) {
@@ -183,7 +130,7 @@ async function init() {
       ? 'all teams'
       : `${managedTeams.length} team(s)`;
     document.getElementById('manager-team-summary').textContent =
-      `${todayCount ?? 0} shift(s) scheduled for today across ${teamLabel}.`;
+      `${todayCount} shift(s) scheduled for today across ${teamLabel}.`;
   }
 
   // 10. Transfer requests widget
@@ -206,14 +153,7 @@ async function loadTransferWidget(userId, isManager, managedTeams) {
 
   if (isManager) {
     const teamIds = managedTeams.map((mt) => mt.team.id);
-    if (teamIds.length > 0) {
-      const { count: managerCount } = await supabase
-        .from('shift_transfer_requests')
-        .select('id', { count: 'exact', head: true })
-        .in('team_id', teamIds)
-        .eq('status', 'pending_manager');
-      count = managerCount ?? 0;
-    }
+    count = await getPendingManagerCount(teamIds);
 
     if (count > 0) {
       widget.className = 'alert alert-warning d-flex align-items-center justify-content-between mb-4';
@@ -221,12 +161,7 @@ async function loadTransferWidget(userId, isManager, managedTeams) {
       body.textContent = `${count} transfer request${count > 1 ? 's' : ''} need${count === 1 ? 's' : ''} your approval.`;
     }
   } else {
-    const { count: incomingCount } = await supabase
-      .from('shift_transfer_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('target_id', userId)
-      .eq('status', 'pending_target');
-    count = incomingCount ?? 0;
+    count = await getIncomingTransferCount(userId);
 
     if (count > 0) {
       widget.className = 'alert alert-info d-flex align-items-center justify-content-between mb-4';
@@ -251,14 +186,7 @@ async function loadLeaveWidget(userId, isManager) {
   let count = 0;
 
   if (isManager) {
-    // Count pending leave requests visible to this manager (RLS auto-scopes to team)
-    const { count: pendingCount } = await supabase
-      .from('leave_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending')
-      .neq('employee_id', userId);
-
-    count = pendingCount ?? 0;
+    count = await getPendingLeaveReviewCount(userId);
 
     if (count > 0) {
       widget.className = 'alert alert-warning d-flex align-items-center justify-content-between mb-4';
@@ -266,14 +194,7 @@ async function loadLeaveWidget(userId, isManager) {
       body.textContent = `${count} leave request${count > 1 ? 's' : ''} need${count === 1 ? 's' : ''} your review.`;
     }
   } else {
-    // Employee: count own pending leave requests
-    const { count: pendingCount } = await supabase
-      .from('leave_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('employee_id', userId)
-      .eq('status', 'pending');
-
-    count = pendingCount ?? 0;
+    count = await getMyPendingLeaveCount(userId);
 
     if (count > 0) {
       widget.className = 'alert alert-info d-flex align-items-center justify-content-between mb-4';
@@ -285,41 +206,6 @@ async function loadLeaveWidget(userId, isManager) {
   if (count > 0) {
     widget.classList.remove('d-none');
   }
-}
-
-// ── Date helpers ──
-
-function getDateOffset(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return toDateString(d);
-}
-
-function getStartOfWeek() {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-  d.setDate(diff);
-  return toDateString(d);
-}
-
-function getEndOfWeek() {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? 0 : 7); // Sunday
-  d.setDate(diff);
-  return toDateString(d);
-}
-
-function getStartOfMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function getEndOfMonth() {
-  const d = new Date();
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return toDateString(lastDay);
 }
 
 // ── Formatting helpers ──
@@ -335,16 +221,6 @@ function calcTotalHours(shifts) {
 }
 
 // ── Transfer helpers ──
-
-async function loadPendingTransferIds() {
-  const { data } = await supabase
-    .from('shift_transfer_requests')
-    .select('shift_id')
-    .eq('requester_id', currentUser.id)
-    .in('status', ['pending_target', 'pending_manager']);
-
-  pendingTransferShiftIds = new Set((data || []).map((r) => r.shift_id));
-}
 
 async function openTransferModal(shiftId, teamId) {
   const shift = dashboardShifts.find((s) => s.id === shiftId);

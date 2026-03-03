@@ -1,7 +1,7 @@
 import { supabase } from '@shared/supabase.js';
 
 const PROFILE_CACHE_KEY = 'ss_profile';
-const MT_CACHE_PREFIX = 'ss_mt_';
+export const MT_CACHE_PREFIX = 'ss_mt_';
 
 /**
  * Returns the authenticated user object or null.

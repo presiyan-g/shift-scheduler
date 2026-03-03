@@ -152,6 +152,42 @@ export async function expireStaleRequests() {
 }
 
 /**
+ * Count transfer requests awaiting manager approval for the given team IDs.
+ */
+export async function getPendingManagerCount(teamIds) {
+  if (!teamIds.length) return 0;
+
+  const { count, error } = await supabase
+    .from('shift_transfer_requests')
+    .select('id', { count: 'exact', head: true })
+    .in('team_id', teamIds)
+    .eq('status', 'pending_manager');
+
+  if (error) {
+    console.error('getPendingManagerCount error:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
+ * Count incoming transfer requests awaiting the target employee's response.
+ */
+export async function getIncomingTransferCount(targetId) {
+  const { count, error } = await supabase
+    .from('shift_transfer_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('target_id', targetId)
+    .eq('status', 'pending_target');
+
+  if (error) {
+    console.error('getIncomingTransferCount error:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
  * Get team members eligible for a transfer (same team, excluding self).
  * Returns [{id, full_name, avatar_url}, ...]
  */

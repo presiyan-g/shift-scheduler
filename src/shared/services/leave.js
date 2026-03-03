@@ -184,6 +184,41 @@ export async function getLeaveRequestsForPeriod(startDate, endDate) {
 }
 
 /**
+ * Count pending leave requests visible to a manager (excludes their own).
+ * RLS auto-scopes to managed teams.
+ */
+export async function getPendingLeaveReviewCount(managerId) {
+  const { count, error } = await supabase
+    .from('leave_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending')
+    .neq('employee_id', managerId);
+
+  if (error) {
+    console.error('getPendingLeaveReviewCount error:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
+ * Count the employee's own pending leave requests.
+ */
+export async function getMyPendingLeaveCount(employeeId) {
+  const { count, error } = await supabase
+    .from('leave_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('employee_id', employeeId)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('getMyPendingLeaveCount error:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
  * Manager or admin cancels an already-approved leave request.
  * @param {string} requestId
  * @param {string} managerNote

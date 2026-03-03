@@ -62,3 +62,83 @@ export function formatDateShort(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
+
+// ── Week helpers ──────────────────────────────────────────────────────────────
+
+/** Return the Monday (start of ISO week) for the given date, at midnight. */
+export function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Return the Sunday (end of ISO week) for the given date, at midnight. */
+export function getWeekEnd(date) {
+  const d = getWeekStart(date);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+/** Return an array of 7 Date objects starting from weekStart. */
+export function getWeekDays(weekStart) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+/** Format a week range label — e.g. "Mon, Jan 5 – Sun, Jan 11, 2026". */
+export function formatWeekLabel(weekStart) {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const opts = { weekday: 'short', month: 'short', day: 'numeric' };
+  const start = weekStart.toLocaleDateString('en-US', opts);
+  const end = weekEnd.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
+  return `${start} – ${end}`;
+}
+
+// ── Month helpers ─────────────────────────────────────────────────────────────
+
+/** Return the 1st of the month for the given date. */
+export function getMonthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+/** Return the last day of the month for the given date. */
+export function getMonthEnd(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+/** Return the number of days in the month of the given date. */
+export function getDaysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+/** Format a month label — e.g. "January 2026". */
+export function formatMonthLabel(date) {
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+/**
+ * Return a "YYYY-MM-DD" string offset by `days` from `refDate` (defaults to today).
+ */
+export function toDateOffset(days, refDate = new Date()) {
+  const d = new Date(refDate);
+  d.setDate(d.getDate() + days);
+  return toDateString(d);
+}
+
+// ── Generic utilities ─────────────────────────────────────────────────────────
+
+/** Return a debounced version of fn that delays execution by `delay` ms. */
+export function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}

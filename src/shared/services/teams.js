@@ -1,6 +1,5 @@
 import { supabase } from '@shared/supabase.js';
-
-const MT_CACHE_PREFIX = 'ss_mt_';
+import { MT_CACHE_PREFIX } from '@shared/auth/auth.js';
 
 /**
  * Fetch teams where the given user is a manager.
